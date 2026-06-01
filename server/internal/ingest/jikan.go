@@ -73,10 +73,14 @@ func (c *JikanClient) FetchFull(ctx context.Context, malID int) (*jikanAnimeRaw,
 var ErrNotFound = errors.New("not found")
 
 type JikanRunOptions struct {
-	Batch     int           // how many anime to enrich per run
-	RPMLimit  int           // requests per minute, Jikan documents 60
-	PerSecond int           // requests per second hard cap, Jikan documents 3
-	MaxAge    time.Duration // re enrich if existing payload is older than this
+	// Batch is how many anime to enrich per run.
+	Batch int
+	// RPMLimit is requests per minute. Jikan documents 60.
+	RPMLimit int
+	// PerSecond is the requests per second hard cap. Jikan documents 3.
+	PerSecond int
+	// MaxAge re enriches if the existing payload is older than this.
+	MaxAge time.Duration
 }
 
 // RunJikanOnce enriches anime that have an AniList captured payload with idMal,

@@ -15,6 +15,7 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/api"
 	"github.com/kgrahammatzen/onepiece-server/config"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/games"
 	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
@@ -69,11 +70,22 @@ func main() {
 		logger.Info("jikan schedule enabled", "interval", cfg.IngestJikanInterval, "batch", cfg.IngestJikanBatch)
 	}
 
+	clueEngine := games.NewClueEngine(pool)
+	engines := map[string]games.GameEngine{
+		clueEngine.GameID(): clueEngine,
+	}
+
+	games.StartScheduler(ctx, pool, logger, games.SchedulerOptions{
+		Interval: time.Hour,
+		Engines:  []games.GameEngine{clueEngine},
+	})
+
 	router := api.NewRouter(api.RouterConfig{
-		Pool:   pool,
-		JWKS:   jwks,
-		Logger: logger,
-		WebURL: cfg.WebURL,
+		Pool:    pool,
+		JWKS:    jwks,
+		Logger:  logger,
+		WebURL:  cfg.WebURL,
+		Engines: engines,
 	})
 
 	srv := &http.Server{

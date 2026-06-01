@@ -17,25 +17,33 @@ type GameEngine interface {
 	BuildShare(ctx context.Context, state AttemptState) SharePayload
 }
 
-// PuzzleDraft is what GeneratePuzzle returns to the store. The store decides date/seed/difficulty.
+// PuzzleDraft is what GeneratePuzzle returns to the store.
+// The store decides date, seed, and difficulty.
 type PuzzleDraft struct {
-	Payload   json.RawMessage // user visible state, sent to clients
-	AnswerKey json.RawMessage // hidden, server only, used to validate guesses
+	// Payload is the user visible state sent to clients.
+	Payload json.RawMessage
+	// AnswerKey is hidden, server only, used to validate guesses.
+	AnswerKey json.RawMessage
 }
 
 type GuessInput struct {
-	PuzzleID   int64
-	AttemptID  int64
-	PlayerID   uuid.UUID
-	Position   int    // 1 based, the Nth guess in this attempt
-	RawGuess   string // user typed text
+	PuzzleID        int64
+	AttemptID       int64
+	PlayerID        uuid.UUID
+	// Position is the 1 based index of this guess within the attempt.
+	Position        int
+	RawGuess        string
 	NormalizedGuess string
-	AnimeID    *int64 // resolved by the autocomplete, may be nil if free text
+	// AnimeID is set when the autocomplete resolved the guess. It may be nil for free text.
+	AnimeID *int64
+	// AnswerKey is the puzzle's server side answer. Never returned to the client.
+	AnswerKey json.RawMessage
 }
 
 type GuessResult struct {
-	Correct     bool            `json:"correct"`
-	Status      string          `json:"status"`  // started, won, lost
+	Correct bool `json:"correct"`
+	// Status is one of started, won, lost.
+	Status      string          `json:"status"`
 	NextClue    json.RawMessage `json:"nextClue,omitempty"`
 	Hint        *string         `json:"hint,omitempty"`
 	GuessesLeft int             `json:"guessesLeft"`
@@ -47,8 +55,9 @@ type AttemptState struct {
 	Status    string
 	Score     int
 	Guesses   []GuessRecord
-	StartedAt int64 // unix ms
-	EndedAt   int64 // unix ms
+	// StartedAt and EndedAt are unix milliseconds.
+	StartedAt int64
+	EndedAt   int64
 }
 
 type GuessRecord struct {

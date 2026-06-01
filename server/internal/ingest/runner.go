@@ -15,9 +15,12 @@ func itoa(n int) string { return strconv.Itoa(n) }
 
 // AniListRunOptions controls how much to ingest in a single pass.
 type AniListRunOptions struct {
-	PerPage  int           // AniList items per page, max 50
-	MaxPages int           // hard cap so we don't crawl forever
-	RPMLimit int           // requests per minute, stay safely under 30 (degraded cap)
+	// PerPage is AniList items per page. Max 50.
+	PerPage int
+	// MaxPages is a hard cap so we don't crawl forever.
+	MaxPages int
+	// RPMLimit is requests per minute. Stay safely under 30, the degraded cap.
+	RPMLimit int
 }
 
 // RunAniListOnce pulls AniList by popularity until HasNextPage is false or MaxPages is hit.

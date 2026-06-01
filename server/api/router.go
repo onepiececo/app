@@ -10,15 +10,17 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/internal/anime"
 	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/games"
 	"github.com/kgrahammatzen/onepiece-server/internal/middleware"
 	"github.com/kgrahammatzen/onepiece-server/internal/player"
 )
 
 type RouterConfig struct {
-	Pool   *pgxpool.Pool
-	JWKS   *auth.JWKSStore
-	Logger *slog.Logger
-	WebURL string
+	Pool    *pgxpool.Pool
+	JWKS    *auth.JWKSStore
+	Logger  *slog.Logger
+	WebURL  string
+	Engines map[string]games.GameEngine
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -26,8 +28,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	animeStore := anime.NewStore(cfg.Pool)
 	playerStore := player.NewStore(cfg.Pool)
+	gamesStore := games.NewStore(cfg.Pool)
+
 	animeH := handlers.NewAnimeHandler(animeStore)
 	playerH := handlers.NewPlayerHandler(playerStore, cfg.JWKS)
+	puzzleH := handlers.NewPuzzleHandler(cfg.Pool, gamesStore, animeStore, playerStore, cfg.JWKS, cfg.Engines)
 
 	jwksAuth := auth.JWKSAuth(cfg.JWKS)
 	authed := func(pattern string, fn http.HandlerFunc) {
@@ -35,9 +40,16 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 
 	mux.HandleFunc("GET /healthz", handlers.Health)
+
 	mux.HandleFunc("GET /v1/anime/search", animeH.Search)
 	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
+
 	mux.HandleFunc("GET /v1/players/me", playerH.Me)
+
+	mux.HandleFunc("GET /v1/puzzles/today", puzzleH.Today)
+	mux.HandleFunc("POST /v1/puzzles/{id}/guess", puzzleH.Guess)
+	mux.HandleFunc("POST /v1/puzzles/{id}/complete", puzzleH.Complete)
+
 	authed("GET /v1/me", handlers.Me)
 
 	mux.HandleFunc("/", notFound)
