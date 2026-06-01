@@ -9,6 +9,7 @@ import (
 	"time"
 
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lmittmann/tint"
 
 	"github.com/kgrahammatzen/onepiece-server/config"
@@ -66,11 +67,7 @@ func runIngestAniList(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		os.Exit(2)
 	}
 
-	pool, err := store.NewPool(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
-	if err != nil {
-		logger.Error("db connect failed", "error", err)
-		os.Exit(1)
-	}
+	pool := connectPool(ctx, cfg, logger)
 	defer pool.Close()
 
 	if err := ingest.RunAniListOnce(ctx, pool, logger, ingest.AniListRunOptions{
@@ -92,11 +89,7 @@ func runIngestJikan(ctx context.Context, cfg *config.Config, logger *slog.Logger
 		os.Exit(2)
 	}
 
-	pool, err := store.NewPool(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
-	if err != nil {
-		logger.Error("db connect failed", "error", err)
-		os.Exit(1)
-	}
+	pool := connectPool(ctx, cfg, logger)
 	defer pool.Close()
 
 	if err := ingest.RunJikanOnce(ctx, pool, logger, ingest.JikanRunOptions{
@@ -107,6 +100,34 @@ func runIngestJikan(ctx context.Context, cfg *config.Config, logger *slog.Logger
 		logger.Error("jikan run failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func connectPool(ctx context.Context, cfg *config.Config, logger *slog.Logger) *pgxpool.Pool {
+	logger.Info("connecting to postgres", "host", hostFromURL(cfg.DatabaseURL), "db", dbFromURL(cfg.DatabaseURL))
+	start := time.Now()
+	pool, err := store.NewPool(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
+	if err != nil {
+		logger.Error("db connect failed", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("postgres connected", "elapsed", time.Since(start).Round(time.Millisecond).String())
+	return pool
+}
+
+func hostFromURL(u string) string {
+	cfg, err := pgxpool.ParseConfig(u)
+	if err != nil {
+		return "unknown"
+	}
+	return fmt.Sprintf("%s:%d", cfg.ConnConfig.Host, cfg.ConnConfig.Port)
+}
+
+func dbFromURL(u string) string {
+	cfg, err := pgxpool.ParseConfig(u)
+	if err != nil {
+		return "unknown"
+	}
+	return cfg.ConnConfig.Database
 }
 
 func usage() {
