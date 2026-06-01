@@ -67,7 +67,7 @@ func runIngestAniList(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	pages := fs.Int("pages", 5, "max pages to crawl per iteration (1 page = up to 50 anime)")
 	rpm := fs.Int("rpm", 25, "requests per minute, keep under 30")
 	perPage := fs.Int("per-page", 50, "items per page, max 50")
-	interval := fs.Duration("interval", 0, "if set, loop forever sleeping this duration between iterations, e.g. 1h or 30m")
+	interval := fs.Duration("interval", time.Hour, "duration between iterations, set 0 for a single shot run")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -91,7 +91,7 @@ func runIngestJikan(ctx context.Context, cfg *config.Config, logger *slog.Logger
 	batch := fs.Int("batch", 50, "candidates to enrich per iteration")
 	rpm := fs.Int("rpm", 60, "requests per minute, Jikan caps at 60")
 	perSec := fs.Int("per-sec", 3, "requests per second, Jikan caps at 3")
-	interval := fs.Duration("interval", 0, "if set, loop forever sleeping this duration between iterations")
+	interval := fs.Duration("interval", 30*time.Minute, "duration between iterations, set 0 for a single shot run")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -152,5 +152,6 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  ingest anilist [--pages N] [--rpm N] [--per-page N] [--interval D]")
 	fmt.Fprintln(os.Stderr, "  ingest jikan   [--batch N] [--rpm N] [--per-sec N] [--interval D]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "with --interval set (e.g. 1h, 30m, 24h) the command loops forever, Ctrl+C exits cleanly")
+	fmt.Fprintln(os.Stderr, "anilist defaults to one pass per hour, jikan to one pass per 30 minutes")
+	fmt.Fprintln(os.Stderr, "pass --interval 0 for a single shot, Ctrl+C exits cleanly from a loop")
 }
