@@ -13,8 +13,8 @@ Daily anime guessing games built on a real catalog pulled from AniList and enric
 
 ```bash
 docker compose up -d
-cd server && go run ./cmd/onepiece     # boots on :8080
-cd web && bun install && bun run dev   # dashboard on localhost:3000
+cd server && go run ./cmd/onepiece
+cd web && bun install && bun run dev
 ```
 
 Migrations run on server boot, both services share the Postgres at `localhost:5432`, and each `.env` file is gitignored next to its `.env.example`.
@@ -71,29 +71,3 @@ The Go server exposes four scopes of routes.
 - Signed in only, `/v1/me`, requires a valid Better Auth JWT
 - CLI only, `onepiece-cli ingest anilist|jikan` for one shot population
 
-## Project Structure
-
-```
-web/                       Next.js 16 dashboard
-  src/
-    app/(games)/clue/      Daily Anime Clue page and components
-    app/api/auth/[...all]/ Better Auth catch-all
-    components/ui/         60+ Base UI primitives
-    db/schema.ts           Drizzle types mirroring server migrations
-    lib/server-client.ts   Bearer-aware fetch wrapper
-  ai/                      Per-component agent docs
-
-server/                    Go HTTP service
-  cmd/onepiece/            Server entry, runs migrations, schedules
-  cmd/onepiece-cli/        Ingest subcommands
-  api/                     Router and handlers (anime, puzzles, players, me, health)
-  internal/
-    anime/                 Catalog upsert, alias resolver, pg_trgm search
-    auth/                  JWKSStore and Bearer verification
-    games/                 GameEngine interface plus Daily Anime Clue
-    ingest/                AniList, Jikan, source payload bookkeeping
-    player/                Anonymous and signed in identity resolver
-  store/                   pgx pool and embedded SQL migrations
-
-docker-compose.yml         Single shared Postgres 17
-```
