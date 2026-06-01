@@ -103,31 +103,14 @@ func runIngestJikan(ctx context.Context, cfg *config.Config, logger *slog.Logger
 }
 
 func connectPool(ctx context.Context, cfg *config.Config, logger *slog.Logger) *pgxpool.Pool {
-	logger.Info("connecting to postgres", "host", hostFromURL(cfg.DatabaseURL), "db", dbFromURL(cfg.DatabaseURL))
-	start := time.Now()
 	pool, err := store.NewPool(ctx, cfg.DatabaseURL, cfg.DBMaxConns)
 	if err != nil {
 		logger.Error("db connect failed", "error", err)
 		os.Exit(1)
 	}
-	logger.Info("postgres connected", "elapsed", time.Since(start).Round(time.Millisecond).String())
+	cc := pool.Config().ConnConfig
+	logger.Info("postgres connected", "host", fmt.Sprintf("%s:%d", cc.Host, cc.Port), "db", cc.Database)
 	return pool
-}
-
-func hostFromURL(u string) string {
-	cfg, err := pgxpool.ParseConfig(u)
-	if err != nil {
-		return "unknown"
-	}
-	return fmt.Sprintf("%s:%d", cfg.ConnConfig.Host, cfg.ConnConfig.Port)
-}
-
-func dbFromURL(u string) string {
-	cfg, err := pgxpool.ParseConfig(u)
-	if err != nil {
-		return "unknown"
-	}
-	return cfg.ConnConfig.Database
 }
 
 func usage() {

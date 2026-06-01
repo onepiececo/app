@@ -61,6 +61,8 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		case <-ticker.C:
 		}
 
+		logger.Info("anilist fetch", "page", page, "per_page", opts.PerPage, "url", anilistEndpoint)
+		fetchStart := time.Now()
 		res, err := client.FetchPage(ctx, page, opts.PerPage)
 		if err != nil {
 			var rl RateLimitError
@@ -76,6 +78,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 			logger.Error("anilist fetch failed", "page", page, "error", err)
 			return err
 		}
+		logger.Info("anilist fetched", "page", page, "rows", len(res.Items), "elapsed", time.Since(fetchStart).Round(time.Millisecond).String())
 
 		for _, m := range res.Items {
 			sourceID := itoa(m.ID)
