@@ -11,8 +11,8 @@ const interHeading = Inter({subsets:['latin'],variable:'--font-heading'});
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata = {
-  title: "Template",
-  description: "Next.js 16 + Better-Auth + coss ui",
+  title: "onepiece, daily anime guessing games",
+  description: "Wordle style anime puzzles, no clips, no spoilers, just brain damage.",
 };
 
 export default function RootLayout({

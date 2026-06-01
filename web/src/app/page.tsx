@@ -1,12 +1,7 @@
-import {
-  Component,
-  KeyRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Puzzle, KeyRound, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Heading, Subheading } from "@/components/ui/heading";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ConceptsTable } from "@/components/concepts/concepts-table";
 
 type Quick = {
   href: string;
@@ -17,15 +12,15 @@ type Quick = {
 
 const QUICK: Quick[] = [
   {
-    href: "/components",
-    title: "Components",
-    description: "Every UI primitive in one showcase, with variant rounds and design history.",
-    icon: Component,
+    href: "/clue",
+    title: "Daily Anime Clue",
+    description: "Guess the anime, six progressive clues, one chance per day.",
+    icon: Puzzle,
   },
   {
     href: "/auth",
-    title: "Auth",
-    description: "Better-Auth variants for sign-in, sign-up, and protected routes.",
+    title: "Sign in",
+    description: "Better Auth, anonymous play merges into your account once you sign in.",
     icon: KeyRound,
   },
 ];
@@ -34,25 +29,22 @@ export default function Page() {
   return (
     <main className="flex min-h-dvh flex-col bg-background">
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-6 py-3">
-        <span className="font-semibold text-sm">Template</span>
-        <span className="text-muted-foreground text-xs">
-          Next.js 16, Better-Auth, Tailwind CSS v4
-        </span>
+        <span className="font-semibold text-sm">onepiece</span>
+        <span className="text-muted-foreground text-xs">daily anime guessing games</span>
         <div className="ml-auto">
           <ThemeToggle />
         </div>
       </header>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-12">
         <section className="flex flex-col gap-2">
-          <Heading>Template</Heading>
+          <Heading>onepiece</Heading>
           <Subheading>
-            A starter scaffolded with Bun, React Compiler, and Turbopack
-            filesystem cache.
+            Wordle style anime puzzles, no clips, no spoilers, just brain damage.
           </Subheading>
         </section>
 
         <section className="flex flex-col gap-3">
-          <h2 className="font-semibold text-sm">Quick links</h2>
+          <h2 className="font-semibold text-sm">Play</h2>
           <ul className="grid gap-3 md:grid-cols-2">
             {QUICK.map((q) => (
               <li key={q.href}>
@@ -69,17 +61,6 @@ export default function Page() {
               </li>
             ))}
           </ul>
-        </section>
-
-        <section className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-semibold text-sm">Concepts</h2>
-            <p className="text-muted-foreground text-sm">
-              Real-product compositions built from the primitives. Add a concept
-              by dropping a folder under <span className="font-mono text-xs">src/app/concepts/</span>.
-            </p>
-          </div>
-          <ConceptsTable />
         </section>
       </div>
     </main>

@@ -53,6 +53,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 	logger.Info("anilist ingest started", "per_page", opts.PerPage, "max_pages", opts.MaxPages, "rpm", opts.RPMLimit)
 
 	page := 1
+	pagesDone := 0
 	upserted := 0
 	for page <= opts.MaxPages {
 		select {
@@ -98,6 +99,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 			upserted++
 		}
 
+		pagesDone++
 		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
 		logger.Info("anilist page", "page", page, "rows", len(res.Items), "fetch_ms", fetchElapsed.Milliseconds(), "total_upserted", upserted)
 
@@ -111,7 +113,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		logger.Warn("alias overrides failed", "error", err)
 	}
 
-	logger.Info("anilist ingest finished", "pages", page, "upserted", upserted)
+	logger.Info("anilist ingest finished", "pages", pagesDone, "upserted", upserted)
 	return nil
 }
 
