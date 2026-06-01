@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { serverFetch, serverJSON } from "@/lib/server-client";
 import { getAnonymousKey } from "@/lib/anonymous-key";
-import { GuessInput } from "./guess-input";
+import { GuessInput } from "@/components/games/guess-input";
 
 type Clue = { type: string; value: string };
 

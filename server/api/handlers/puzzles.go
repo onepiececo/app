@@ -244,7 +244,7 @@ func (h *PuzzleHandler) loadGuesses(ctx context.Context, attemptID int64) []prio
 func (h *PuzzleHandler) attemptState(ctx context.Context, puzzleID, attemptID int64, status string) games.AttemptState {
 	state := games.AttemptState{PuzzleID: puzzleID, AttemptID: attemptID, Status: status}
 	rows, err := h.pool.Query(ctx, `
-		SELECT position, raw_guess, (result->>'correct')::bool
+		SELECT position, raw_guess, (result->>'correct')::bool, result
 		FROM puzzle_guess WHERE attempt_id = $1 ORDER BY position ASC
 	`, attemptID)
 	if err != nil {
@@ -253,7 +253,7 @@ func (h *PuzzleHandler) attemptState(ctx context.Context, puzzleID, attemptID in
 	defer rows.Close()
 	for rows.Next() {
 		var g games.GuessRecord
-		if err := rows.Scan(&g.Position, &g.RawGuess, &g.Correct); err == nil {
+		if err := rows.Scan(&g.Position, &g.RawGuess, &g.Correct, &g.Detail); err == nil {
 			state.Guesses = append(state.Guesses, g)
 		}
 	}

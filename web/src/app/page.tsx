@@ -1,4 +1,4 @@
-import { Puzzle, KeyRound, type LucideIcon } from "lucide-react";
+import { Puzzle, Grid3x3, KeyRound, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { Heading, Subheading } from "@/components/ui/heading";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -16,6 +16,12 @@ const QUICK: Quick[] = [
     title: "Daily Anime Clue",
     description: "Guess the anime, six progressive clues, one chance per day.",
     icon: Puzzle,
+  },
+  {
+    href: "/wordle",
+    title: "Daily Anime Wordle",
+    description: "Guess any anime, color-coded comparison across seven categories.",
+    icon: Grid3x3,
   },
   {
     href: "/auth",

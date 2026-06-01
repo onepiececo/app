@@ -47,6 +47,8 @@ type GuessResult struct {
 	NextClue    json.RawMessage `json:"nextClue,omitempty"`
 	Hint        *string         `json:"hint,omitempty"`
 	GuessesLeft int             `json:"guessesLeft"`
+	// Detail is engine specific payload, used by the wordle compare grid.
+	Detail json.RawMessage `json:"detail,omitempty"`
 }
 
 type AttemptState struct {
@@ -64,6 +66,8 @@ type GuessRecord struct {
 	Position int
 	RawGuess string
 	Correct  bool
+	// Detail is the engine specific blob persisted to puzzle_guess.result.
+	Detail json.RawMessage
 }
 
 type SharePayload struct {

@@ -53,14 +53,16 @@ func main() {
 	go jwks.StartRefresh(ctx, 5*time.Minute)
 
 	clueEngine := games.NewClueEngine(pool)
+	wordleEngine := games.NewWordleEngine(pool)
 	engines := map[string]games.GameEngine{
-		clueEngine.GameID(): clueEngine,
+		clueEngine.GameID():   clueEngine,
+		wordleEngine.GameID(): wordleEngine,
 	}
 
 	games.StartScheduler(ctx, pool, logger, games.SchedulerOptions{
-		Interval:      time.Hour,
-		BackfillDays:  cfg.PuzzleBackfillDays,
-		Engines:       []games.GameEngine{clueEngine},
+		Interval:     time.Hour,
+		BackfillDays: cfg.PuzzleBackfillDays,
+		Engines:      []games.GameEngine{clueEngine, wordleEngine},
 	})
 
 	router := api.NewRouter(api.RouterConfig{
