@@ -1,4 +1,4 @@
-import { bigint, bigserial, boolean, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 // Better Auth core tables.
 // The Go server owns the migrations under server/store/migrations.
@@ -92,6 +92,9 @@ export const anime = pgTable("anime", {
   coverSourceUrl: text("cover_source_url"),
   bannerSourceUrl: text("banner_source_url"),
   coverColor: text("cover_color"),
+
+  malRank: integer("mal_rank"),
+  malMembers: integer("mal_members"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -210,4 +213,48 @@ export const animeAsset = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => ({ assetUnique: unique().on(t.animeId, t.kind, t.source) }),
+);
+
+// Ingestion bookkeeping. Owned by 003_ingestion.up.sql.
+
+export const sourceRuns = pgTable("source_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  source: text("source").notNull(),
+  job: text("job").notNull(),
+  status: text("status").notNull().default("running"),
+  cursor: jsonb("cursor"),
+  rowsSeen: integer("rows_seen").notNull().default(0),
+  rowsWritten: integer("rows_written").notNull().default(0),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  error: text("error"),
+});
+
+export const sourcePayloads = pgTable(
+  "source_payloads",
+  {
+    source: text("source").notNull(),
+    sourceId: text("source_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    payloadHash: text("payload_hash"),
+    fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.source, t.sourceId] }) }),
+);
+
+export const sourceIdMap = pgTable(
+  "source_id_map",
+  {
+    source: text("source").notNull(),
+    sourceId: text("source_id").notNull(),
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    confidence: integer("confidence").notNull().default(100),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.source, t.sourceId] }),
+    animeUnique: unique().on(t.animeId, t.source),
+  }),
 );

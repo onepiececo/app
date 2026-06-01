@@ -1,0 +1,6 @@
+ALTER TABLE anime DROP COLUMN IF EXISTS mal_members;
+ALTER TABLE anime DROP COLUMN IF EXISTS mal_rank;
+
+DROP TABLE IF EXISTS source_id_map;
+DROP TABLE IF EXISTS source_payloads;
+DROP TABLE IF EXISTS source_runs;

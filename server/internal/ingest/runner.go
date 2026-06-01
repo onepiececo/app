@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kgrahammatzen/onepiece-server/internal/anime"
 )
+
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // AniListRunOptions controls how much to ingest in a single pass.
 type AniListRunOptions struct {
@@ -19,7 +22,8 @@ type AniListRunOptions struct {
 
 // RunAniListOnce pulls AniList by popularity until HasNextPage is false or MaxPages is hit.
 // Throttles to RPMLimit, retries on RateLimitError.
-func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRunOptions) error {
+// Every page's raw payload lands in source_payloads, every anime is linked via source_id_map.
+func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRunOptions) (runErr error) {
 	if opts.PerPage <= 0 || opts.PerPage > 50 {
 		opts.PerPage = 50
 	}
@@ -29,6 +33,12 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 	if opts.RPMLimit <= 0 {
 		opts.RPMLimit = 25
 	}
+
+	run, err := StartRun(ctx, pool, "anilist", "catalog")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = run.Finish(ctx, pool, runErr) }()
 
 	client := NewAniListClient()
 	store := anime.NewStore(pool)
@@ -65,14 +75,25 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		}
 
 		for _, m := range res.Items {
+			sourceID := itoa(m.ID)
+			if _, err := SavePayload(ctx, pool, "anilist", sourceID, m); err != nil {
+				logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
+				continue
+			}
 			u := toUpsert(m)
-			if _, err := store.Upsert(ctx, u); err != nil {
+			animeID, err := store.Upsert(ctx, u)
+			if err != nil {
 				logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
+				continue
+			}
+			if err := MapExternalID(ctx, pool, "anilist", sourceID, animeID); err != nil {
+				logger.Warn("map external id failed", "anilist_id", m.ID, "error", err)
 				continue
 			}
 			upserted++
 		}
 
+		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
 		logger.Info("anilist page done", "page", page, "rows", len(res.Items), "total_upserted", upserted)
 
 		if !res.HasNextPage {

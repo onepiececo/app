@@ -60,6 +60,15 @@ func main() {
 		logger.Info("anilist schedule enabled", "interval", cfg.IngestAniListInterval, "max_pages", cfg.IngestAniListMaxPages, "rpm", cfg.IngestAniListRPM)
 	}
 
+	if cfg.IngestJikanEnabled {
+		ingest.StartJikanSchedule(ctx, pool, logger, cfg.IngestJikanInterval, ingest.JikanRunOptions{
+			Batch:     cfg.IngestJikanBatch,
+			RPMLimit:  60,
+			PerSecond: 3,
+		})
+		logger.Info("jikan schedule enabled", "interval", cfg.IngestJikanInterval, "batch", cfg.IngestJikanBatch)
+	}
+
 	router := api.NewRouter(api.RouterConfig{
 		Pool:   pool,
 		JWKS:   jwks,

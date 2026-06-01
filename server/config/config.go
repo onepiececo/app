@@ -20,6 +20,10 @@ type Config struct {
 	IngestAniListInterval time.Duration `env:"INGEST_ANILIST_INTERVAL" envDefault:"24h"`
 	IngestAniListMaxPages int           `env:"INGEST_ANILIST_MAX_PAGES" envDefault:"20"`
 	IngestAniListRPM      int           `env:"INGEST_ANILIST_RPM" envDefault:"25"`
+
+	IngestJikanEnabled  bool          `env:"INGEST_JIKAN_ENABLED" envDefault:"false"`
+	IngestJikanInterval time.Duration `env:"INGEST_JIKAN_INTERVAL" envDefault:"12h"`
+	IngestJikanBatch    int           `env:"INGEST_JIKAN_BATCH" envDefault:"200"`
 }
 
 func Load() (*Config, error) {
