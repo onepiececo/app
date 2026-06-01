@@ -61,11 +61,24 @@ type AnimeUpsert struct {
 	BannerSourceURL *string
 	CoverColor      *string
 
-	Aliases   []AliasUpsert
-	Studios   []StudioUpsert
-	Tags      []TagUpsert
-	Genres    []string
-	Relations []RelationUpsert
+	Aliases    []AliasUpsert
+	Studios    []StudioUpsert
+	Tags       []TagUpsert
+	Genres     []string
+	Relations  []RelationUpsert
+	Characters []CharacterUpsert
+}
+
+type CharacterUpsert struct {
+	Source     string
+	SourceID   string
+	NameFull   string
+	NameNative *string
+	ImageURL   *string
+	Gender     *string
+	Age        *string
+	// Role is one of MAIN, SUPPORTING, BACKGROUND per AniList's CharacterRole enum.
+	Role string
 }
 
 type AliasUpsert struct {
@@ -241,6 +254,38 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 			VALUES ($1, $2, $3, $4)
 		`, animeID, r.ToSource, r.ToSourceID, r.RelationType); err != nil {
 			return 0, fmt.Errorf("insert relation: %w", err)
+		}
+	}
+
+	for _, c := range u.Characters {
+		if c.NameFull == "" || c.SourceID == "" {
+			continue
+		}
+		role := c.Role
+		if role == "" {
+			role = "SUPPORTING"
+		}
+		var charaID int64
+		if err := tx.QueryRow(ctx, `
+			INSERT INTO chara (source, source_id, name_full, name_native, image_url, gender, age, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+			ON CONFLICT (source, source_id) DO UPDATE SET
+				name_full   = EXCLUDED.name_full,
+				name_native = COALESCE(EXCLUDED.name_native, chara.name_native),
+				image_url   = COALESCE(EXCLUDED.image_url, chara.image_url),
+				gender      = COALESCE(EXCLUDED.gender, chara.gender),
+				age         = COALESCE(EXCLUDED.age, chara.age),
+				updated_at  = now()
+			RETURNING id
+		`, c.Source, c.SourceID, c.NameFull, c.NameNative, c.ImageURL, c.Gender, c.Age).Scan(&charaID); err != nil {
+			return 0, fmt.Errorf("upsert chara: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO anime_chara (anime_id, chara_id, role)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (anime_id, chara_id) DO UPDATE SET role = EXCLUDED.role
+		`, animeID, charaID, role); err != nil {
+			return 0, fmt.Errorf("link chara: %w", err)
 		}
 	}
 

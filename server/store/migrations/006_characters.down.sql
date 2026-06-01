@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS anime_chara;
+DROP TABLE IF EXISTS chara;

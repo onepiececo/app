@@ -74,6 +74,18 @@ query CatalogPage($page: Int!, $perPage: Int!) {
           node { id idMal }
         }
       }
+      characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+        edges {
+          role
+          node {
+            id
+            name { full native }
+            image { large }
+            gender
+            age
+          }
+        }
+      }
       coverImage {
         extraLarge
         large
@@ -149,6 +161,23 @@ type anilistMedia struct {
 			} `json:"node"`
 		} `json:"edges"`
 	} `json:"relations"`
+	Characters struct {
+		Edges []struct {
+			Role string `json:"role"`
+			Node struct {
+				ID   int `json:"id"`
+				Name struct {
+					Full   *string `json:"full"`
+					Native *string `json:"native"`
+				} `json:"name"`
+				Image struct {
+					Large *string `json:"large"`
+				} `json:"image"`
+				Gender *string `json:"gender"`
+				Age    *string `json:"age"`
+			} `json:"node"`
+		} `json:"edges"`
+	} `json:"characters"`
 	CoverImage struct {
 		ExtraLarge *string `json:"extraLarge"`
 		Large      *string `json:"large"`
@@ -291,6 +320,27 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 			ToSource:     "anilist",
 			ToSourceID:   strconv.Itoa(edge.Node.ID),
 			RelationType: edge.RelationType,
+		})
+	}
+
+	for _, edge := range m.Characters.Edges {
+		name := pickTitle(edge.Node.Name.Full, edge.Node.Name.Native)
+		if name == "" || edge.Node.ID == 0 {
+			continue
+		}
+		role := edge.Role
+		if role == "" {
+			role = "SUPPORTING"
+		}
+		u.Characters = append(u.Characters, anime.CharacterUpsert{
+			Source:     "anilist",
+			SourceID:   strconv.Itoa(edge.Node.ID),
+			NameFull:   name,
+			NameNative: edge.Node.Name.Native,
+			ImageURL:   edge.Node.Image.Large,
+			Gender:     edge.Node.Gender,
+			Age:        edge.Node.Age,
+			Role:       role,
 		})
 	}
 

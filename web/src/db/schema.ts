@@ -194,6 +194,33 @@ export const animeRelation = pgTable("anime_relation", {
   relationType: text("relation_type").notNull(),
 });
 
+export const chara = pgTable("chara", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  source: text("source").notNull(),
+  sourceId: text("source_id").notNull(),
+  nameFull: text("name_full").notNull(),
+  nameNative: text("name_native"),
+  imageUrl: text("image_url"),
+  gender: text("gender"),
+  age: text("age"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => ({ sourceUniq: unique().on(t.source, t.sourceId) }));
+
+export const animeChara = pgTable(
+  "anime_chara",
+  {
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    charaId: bigint("chara_id", { mode: "number" })
+      .notNull()
+      .references(() => chara.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("SUPPORTING"),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.animeId, t.charaId] }) }),
+);
+
 export const animeAsset = pgTable(
   "anime_asset",
   {
