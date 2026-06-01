@@ -8,3 +8,7 @@ node_modules
 drizzle/
 tsconfig.tsbuildinfo
 .claude/
+
+# Override the user-wide *.md ignore. Project docs (AGENTS.md, ai/**) ship in the repo.
+!*.md
+!ai/**/*.md
