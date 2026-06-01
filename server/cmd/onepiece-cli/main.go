@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	_ "github.com/joho/godotenv/autoload"
 	"github.com/lmittmann/tint"
 
 	"github.com/kgrahammatzen/onepiece-server/config"
