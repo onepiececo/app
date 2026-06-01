@@ -61,7 +61,6 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		case <-ticker.C:
 		}
 
-		logger.Info("anilist fetch", "page", page, "per_page", opts.PerPage, "url", anilistEndpoint)
 		fetchStart := time.Now()
 		res, err := client.FetchPage(ctx, page, opts.PerPage)
 		if err != nil {
@@ -78,7 +77,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 			logger.Error("anilist fetch failed", "page", page, "error", err)
 			return err
 		}
-		logger.Info("anilist fetched", "page", page, "rows", len(res.Items), "elapsed", time.Since(fetchStart).Round(time.Millisecond).String())
+		fetchElapsed := time.Since(fetchStart).Round(time.Millisecond)
 
 		for _, m := range res.Items {
 			sourceID := itoa(m.ID)
@@ -100,7 +99,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		}
 
 		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
-		logger.Info("anilist page done", "page", page, "rows", len(res.Items), "total_upserted", upserted)
+		logger.Info("anilist page", "page", page, "rows", len(res.Items), "fetch_ms", fetchElapsed.Milliseconds(), "total_upserted", upserted)
 
 		if !res.HasNextPage {
 			break

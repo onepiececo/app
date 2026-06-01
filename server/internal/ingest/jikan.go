@@ -131,7 +131,6 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 		case <-ticker.C:
 		}
 
-		logger.Info("jikan fetch", "mal_id", c.MalID, "anime_id", c.AnimeID)
 		fetchStart := time.Now()
 		data, err := client.FetchFull(ctx, c.MalID)
 		if err != nil {
@@ -152,7 +151,7 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 			logger.Warn("jikan fetch failed", "mal_id", c.MalID, "error", err)
 			continue
 		}
-		logger.Info("jikan fetched", "mal_id", c.MalID, "title", data.Title, "elapsed", time.Since(fetchStart).Round(time.Millisecond).String())
+		logger.Info("jikan enrich", "mal_id", c.MalID, "title", data.Title, "fetch_ms", time.Since(fetchStart).Milliseconds())
 
 		if _, err := SavePayload(ctx, pool, "jikan", strconv.Itoa(c.MalID), data); err != nil {
 			logger.Warn("save jikan payload failed", "mal_id", c.MalID, "error", err)
