@@ -77,6 +77,7 @@ export const anime = pgTable("anime", {
 
   format: text("format"),
   status: text("status"),
+  source: text("source"),
   season: text("season"),
   seasonYear: integer("season_year"),
   episodes: integer("episodes"),

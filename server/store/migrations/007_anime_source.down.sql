@@ -1,0 +1,1 @@
+ALTER TABLE anime DROP COLUMN IF EXISTS source;

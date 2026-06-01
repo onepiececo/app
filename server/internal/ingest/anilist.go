@@ -43,6 +43,7 @@ query CatalogPage($page: Int!, $perPage: Int!) {
       synonyms
       format
       status
+      source
       season
       seasonYear
       episodes
@@ -124,6 +125,7 @@ type anilistMedia struct {
 	Synonyms     []string `json:"synonyms"`
 	Format       *string  `json:"format"`
 	Status       *string  `json:"status"`
+	Source       *string  `json:"source"`
 	Season       *string  `json:"season"`
 	SeasonYear   *int     `json:"seasonYear"`
 	Episodes     *int     `json:"episodes"`
@@ -261,6 +263,7 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		TitleNative:     m.Title.Native,
 		Format:          m.Format,
 		Status:          m.Status,
+		Source:          m.Source,
 		Season:          m.Season,
 		SeasonYear:      m.SeasonYear,
 		Episodes:        m.Episodes,
