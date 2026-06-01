@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+*.exe
+dist/
+tmp/
+server/onepiece
+server/onepiece-cli
+.DS_Store
+nul

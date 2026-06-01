@@ -1,0 +1,143 @@
+"use client";
+
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import type React from "react";
+import { tv } from "tailwind-variants";
+import { mergeBaseUiClassName } from "@/lib/base-ui-class-name";
+
+export const popoverVariants = tv({
+  slots: {
+    positioner:
+      "z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom,transform] data-instant:transition-none",
+    popup: [
+      "relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-xl bg-popover text-popover-foreground outline-none",
+      "shadow-[0_2px_8px_rgb(0_0_0/0.06),0_1px_2px_rgb(0_0_0/0.04)] dark:shadow-[0_2px_8px_rgb(0_0_0/0.3),0_1px_2px_rgb(0_0_0/0.2),0_0_0_1px_rgb(255_255_255/0.06)]",
+      "transition-[width,height,scale,opacity] duration-[200ms] ease-[cubic-bezier(0.16,1,0.3,1)] data-ending-style:duration-[140ms] data-ending-style:ease-[cubic-bezier(0.4,0,1,1)] data-starting-style:scale-[0.92] data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0 data-instant:transition-none",
+    ],
+    viewport:
+      "relative size-full max-h-(--available-height) overflow-clip px-(--viewport-inline-padding) py-3 [--viewport-inline-padding:--spacing(3)] has-data-[slot=calendar]:p-2 data-instant:transition-none **:data-current:data-ending-style:opacity-0 **:data-current:data-starting-style:opacity-0 **:data-previous:data-ending-style:opacity-0 **:data-previous:data-starting-style:opacity-0 **:data-current:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding))] **:data-previous:w-[calc(var(--popup-width)-2*var(--viewport-inline-padding))] **:data-current:opacity-100 **:data-previous:opacity-100 **:data-current:transition-opacity **:data-previous:transition-opacity",
+    title: "font-semibold text-lg leading-none",
+    description: "text-muted-foreground text-sm",
+  },
+  variants: {
+    tooltipStyle: {
+      true: {
+        popup: "w-fit text-balance rounded-md text-xs",
+        viewport: "py-1 [--viewport-inline-padding:--spacing(2)]",
+      },
+      false: {
+        viewport: "not-data-transitioning:overflow-y-auto",
+      },
+    },
+  },
+  defaultVariants: {
+    tooltipStyle: false,
+  },
+});
+
+const popoverStyles = popoverVariants();
+
+export const PopoverCreateHandle: typeof PopoverPrimitive.createHandle =
+  PopoverPrimitive.createHandle;
+
+export const Popover: typeof PopoverPrimitive.Root = PopoverPrimitive.Root;
+
+export function PopoverTrigger({
+  className,
+  children,
+  ...props
+}: PopoverPrimitive.Trigger.Props): React.ReactElement {
+  return (
+    <PopoverPrimitive.Trigger
+      className={className}
+      data-slot="popover-trigger"
+      {...props}
+    >
+      {children}
+    </PopoverPrimitive.Trigger>
+  );
+}
+
+export function PopoverPopup({
+  children,
+  className,
+  side = "bottom",
+  align = "center",
+  sideOffset = 4,
+  alignOffset = 0,
+  tooltipStyle = false,
+  anchor,
+  portalProps,
+  ...props
+}: PopoverPrimitive.Popup.Props & {
+  portalProps?: PopoverPrimitive.Portal.Props;
+  side?: PopoverPrimitive.Positioner.Props["side"];
+  align?: PopoverPrimitive.Positioner.Props["align"];
+  sideOffset?: PopoverPrimitive.Positioner.Props["sideOffset"];
+  alignOffset?: PopoverPrimitive.Positioner.Props["alignOffset"];
+  tooltipStyle?: boolean;
+  anchor?: PopoverPrimitive.Positioner.Props["anchor"];
+}): React.ReactElement {
+  const styles = popoverVariants({ tooltipStyle });
+
+  return (
+    <PopoverPrimitive.Portal {...portalProps}>
+      <PopoverPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        anchor={anchor}
+        className={styles.positioner()}
+        data-slot="popover-positioner"
+        side={side}
+        sideOffset={sideOffset}
+      >
+        <PopoverPrimitive.Popup
+          className={mergeBaseUiClassName(styles.popup, className)}
+          data-slot="popover-popup"
+          {...props}
+        >
+          <PopoverPrimitive.Viewport
+            className={styles.viewport()}
+            data-slot="popover-viewport"
+          >
+            {children}
+          </PopoverPrimitive.Viewport>
+        </PopoverPrimitive.Popup>
+      </PopoverPrimitive.Positioner>
+    </PopoverPrimitive.Portal>
+  );
+}
+
+export function PopoverClose({
+  ...props
+}: PopoverPrimitive.Close.Props): React.ReactElement {
+  return <PopoverPrimitive.Close data-slot="popover-close" {...props} />;
+}
+
+export function PopoverTitle({
+  className,
+  ...props
+}: PopoverPrimitive.Title.Props): React.ReactElement {
+  return (
+    <PopoverPrimitive.Title
+      className={mergeBaseUiClassName(popoverStyles.title, className)}
+      data-slot="popover-title"
+      {...props}
+    />
+  );
+}
+
+export function PopoverDescription({
+  className,
+  ...props
+}: PopoverPrimitive.Description.Props): React.ReactElement {
+  return (
+    <PopoverPrimitive.Description
+      className={mergeBaseUiClassName(popoverStyles.description, className)}
+      data-slot="popover-description"
+      {...props}
+    />
+  );
+}
+
+export { PopoverPrimitive, PopoverPopup as PopoverContent };
