@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { serverFetch, serverJSON } from "@/lib/server-client";
 import { getAnonymousKey } from "@/lib/anonymous-key";
 import { GuessInput } from "@/components/games/guess-input";
+import { getTodayPuzzle, submitGuess, type TodayResponse } from "@/app/actions/puzzles";
 
 const CATEGORY_LABELS: Record<string, string> = {
   format: "format",
@@ -57,95 +57,72 @@ type PriorGuess = {
   };
 };
 
-type TodayResponse = {
-  puzzle: Puzzle;
-  attempt?: Attempt;
-  guesses?: PriorGuess[];
+type WordleBoardProps = {
+  initial: TodayResponse | null;
+  initialError: string | null;
 };
 
-type GuessResultResp = {
-  correct: boolean;
-  status: "started" | "won" | "lost";
-  guessesLeft: number;
-  detail?: Compare;
-  nextClue?: { answer?: string; slug?: string };
-};
-
-export const WordleBoard = () => {
-  const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
-  const [attempt, setAttempt] = useState<Attempt | null>(null);
-  const [guesses, setGuesses] = useState<PriorGuess[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
+export const WordleBoard = (props: WordleBoardProps) => {
+  const [puzzle, setPuzzle] = useState<Puzzle | null>((props.initial?.puzzle ?? null) as Puzzle | null);
+  const [attempt, setAttempt] = useState<Attempt | null>((props.initial?.attempt ?? null) as Attempt | null);
+  const [guesses, setGuesses] = useState<PriorGuess[]>((props.initial?.guesses ?? []) as PriorGuess[]);
+  const [errorText, setErrorText] = useState<string | null>(props.initialError);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
   const anonKey = useRef<string>("");
 
   useEffect(() => {
     anonKey.current = getAnonymousKey();
     let cancelled = false;
-    serverJSON<TodayResponse>("/v1/puzzles/today?game=wordle", {
-      headers: { "X-Anonymous-Key": anonKey.current },
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setPuzzle(res.puzzle);
-        setAttempt(res.attempt ?? null);
-        setGuesses(res.guesses ?? []);
-        if (res.attempt?.status === "lost") {
-          const last = res.guesses?.[res.guesses.length - 1];
-          if (last?.result.nextClue?.answer) setRevealed(last.result.nextClue.answer);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setErrorText(err instanceof Error ? err.message : "failed to load puzzle");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    startTransition(async () => {
+      const res = await getTodayPuzzle("wordle", anonKey.current);
+      if (cancelled) return;
+      if (!res.success) {
+        setErrorText(res.error);
+        return;
+      }
+      setPuzzle(res.data.puzzle as unknown as Puzzle);
+      setAttempt((res.data.attempt as Attempt | undefined) ?? null);
+      setGuesses((res.data.guesses ?? []) as PriorGuess[]);
+      if (res.data.attempt?.status === "lost") {
+        const last = res.data.guesses?.[res.data.guesses.length - 1];
+        if (last?.result.nextClue?.answer) setRevealed(last.result.nextClue.answer);
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (loading || !puzzle) return <BoardSkeleton categories={7} />;
+  if (!puzzle) return <BoardSkeleton categories={7} />;
 
   const status = attempt?.status ?? "started";
   const done = status !== "started";
   const categories = puzzle.payload.categories;
 
-  const submit = async (raw: string, animeId: number | null) => {
-    if (!raw.trim() || submitting) return;
-    setSubmitting(true);
+  const submit = (raw: string, animeId: number | null) => {
+    if (!raw.trim() || pending) return;
     setErrorText(null);
-    try {
-      const res = await serverFetch(`/v1/puzzles/${puzzle.id}/guesses`, {
-        method: "POST",
-        headers: { "X-Anonymous-Key": anonKey.current },
-        body: JSON.stringify({ rawGuess: raw, animeId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "guess failed" }));
-        setErrorText(typeof body.message === "string" ? body.message : "guess failed");
+    startTransition(async () => {
+      const res = await submitGuess(puzzle.id, raw, animeId, anonKey.current);
+      if (!res.success) {
+        setErrorText(res.error);
         return;
       }
-      const result = (await res.json()) as GuessResultResp;
-      const nextGuess: PriorGuess = {
+      const next: PriorGuess = {
         position: (attempt?.guessesCount ?? 0) + 1,
         rawGuess: raw,
-        result,
+        result: res.result as PriorGuess["result"],
       };
-      setGuesses((g) => [...g, nextGuess]);
+      setGuesses((g) => [...g, next]);
       setAttempt((a) => ({
         id: a?.id ?? 0,
-        status: result.status,
+        status: res.result.status,
         score: a?.score ?? 0,
         guessesCount: (a?.guessesCount ?? 0) + 1,
       }));
-      if (result.nextClue?.answer) setRevealed(result.nextClue.answer);
-    } finally {
-      setSubmitting(false);
-    }
+      if (res.result.nextClue?.answer) setRevealed(res.result.nextClue.answer);
+    });
   };
 
   return (
@@ -162,7 +139,7 @@ export const WordleBoard = () => {
       </div>
 
       {!done ? (
-        <GuessInput onSubmit={submit} disabled={submitting} />
+        <GuessInput onSubmit={submit} disabled={pending} />
       ) : (
         <ResultPanel
           status={status}

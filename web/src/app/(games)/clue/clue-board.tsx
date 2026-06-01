@@ -1,142 +1,87 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { serverFetch, serverJSON } from "@/lib/server-client";
 import { getAnonymousKey } from "@/lib/anonymous-key";
 import { GuessInput } from "@/components/games/guess-input";
-
-type Clue = { type: string; value: string };
-
-type Puzzle = {
-  id: number;
-  puzzleDate?: string;
-  payload: {
-    game: string;
-    maxGuesses: number;
-    guessLabel: string;
-    clues: Clue[];
-  };
-};
-
-type Attempt = {
-  id: number;
-  status: "started" | "won" | "lost";
-  score: number;
-  guessesCount: number;
-};
-
-type PriorGuess = {
-  position: number;
-  rawGuess: string;
-  result: {
-    correct: boolean;
-    status: string;
-    nextClue?: { answer?: string; slug?: string } | null;
-  };
-};
-
-type TodayResponse = {
-  puzzle: Puzzle;
-  attempt?: Attempt;
-  guesses?: PriorGuess[];
-};
-
-type GuessResult = {
-  correct: boolean;
-  status: "started" | "won" | "lost";
-  guessesLeft: number;
-  nextClue?: { answer?: string; slug?: string };
-};
+import { getTodayPuzzle, submitGuess, type TodayResponse, type PriorGuess, type Puzzle, type Attempt } from "@/app/actions/puzzles";
 
 type ClueBoardProps = {
-  initial?: TodayResponse;
+  initial: TodayResponse | null;
+  initialError: string | null;
 };
 
 export const ClueBoard = (props: ClueBoardProps) => {
   const [puzzle, setPuzzle] = useState<Puzzle | null>(props.initial?.puzzle ?? null);
   const [attempt, setAttempt] = useState<Attempt | null>(props.initial?.attempt ?? null);
   const [guesses, setGuesses] = useState<PriorGuess[]>(props.initial?.guesses ?? []);
-  const [loading, setLoading] = useState(!props.initial);
-  const [submitting, setSubmitting] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(props.initialError);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
   const anonKey = useRef<string>("");
 
   useEffect(() => {
     anonKey.current = getAnonymousKey();
     let cancelled = false;
-    serverJSON<TodayResponse>("/v1/puzzles/today?game=clue", {
-      headers: { "X-Anonymous-Key": anonKey.current },
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setPuzzle(res.puzzle);
-        setAttempt(res.attempt ?? null);
-        setGuesses(res.guesses ?? []);
-        const lastReveal = res.guesses?.findLast?.((g) => g.result.status === "lost");
-        if (lastReveal && res.attempt?.status === "lost") {
-          setRevealed(extractAnswer(lastReveal));
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setErrorText(err instanceof Error ? err.message : "failed to load puzzle");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    startTransition(async () => {
+      const res = await getTodayPuzzle("clue", anonKey.current);
+      if (cancelled) return;
+      if (!res.success) {
+        setErrorText(res.error);
+        return;
+      }
+      setPuzzle(res.data.puzzle);
+      setAttempt(res.data.attempt ?? null);
+      setGuesses(res.data.guesses ?? []);
+      if (res.data.attempt?.status === "lost") {
+        const last = res.data.guesses?.[res.data.guesses.length - 1];
+        if (last?.result.nextClue?.answer) setRevealed(last.result.nextClue.answer);
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (loading || !puzzle) return <ClueBoardSkeleton />;
+  if (!puzzle) return <ClueBoardSkeleton />;
 
-  const visibleClueCount = Math.min(puzzle.payload.clues.length, (attempt?.guessesCount ?? 0) + 1);
+  const cluesPayload = (puzzle.payload as { clues?: Clue[] }).clues ?? [];
+  const visibleClueCount = Math.min(cluesPayload.length, (attempt?.guessesCount ?? 0) + 1);
   const status = attempt?.status ?? "started";
   const done = status !== "started";
 
-  const submit = async (raw: string, animeId: number | null) => {
-    if (!raw.trim() || submitting) return;
-    setSubmitting(true);
+  const submit = (raw: string, animeId: number | null) => {
+    if (!raw.trim() || pending) return;
     setErrorText(null);
-    try {
-      const res = await serverFetch(`/v1/puzzles/${puzzle.id}/guesses`, {
-        method: "POST",
-        headers: { "X-Anonymous-Key": anonKey.current },
-        body: JSON.stringify({ rawGuess: raw, animeId }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "guess failed" }));
-        setErrorText(typeof body.message === "string" ? body.message : "guess failed");
+    startTransition(async () => {
+      const res = await submitGuess(puzzle.id, raw, animeId, anonKey.current);
+      if (!res.success) {
+        setErrorText(res.error);
         return;
       }
-      const result = (await res.json()) as GuessResult;
-      const nextGuess: PriorGuess = {
+      const next: PriorGuess = {
         position: (attempt?.guessesCount ?? 0) + 1,
         rawGuess: raw,
-        result: { correct: result.correct, status: result.status },
+        result: res.result,
       };
-      setGuesses((g) => [...g, nextGuess]);
+      setGuesses((g) => [...g, next]);
       setAttempt((a) => ({
         id: a?.id ?? 0,
-        status: result.status,
+        status: res.result.status,
         score: a?.score ?? 0,
         guessesCount: (a?.guessesCount ?? 0) + 1,
       }));
-      if (result.nextClue?.answer) setRevealed(result.nextClue.answer);
-    } finally {
-      setSubmitting(false);
-    }
+      if (res.result.nextClue?.answer) setRevealed(res.result.nextClue.answer);
+    });
   };
 
   return (
     <div className="flex flex-col gap-5">
-      <ClueStack clues={puzzle.payload.clues} visible={visibleClueCount} status={status} />
+      <ClueStack clues={cluesPayload} visible={visibleClueCount} status={status} />
 
       {guesses.length > 0 ? (
         <ul className="flex flex-col gap-1.5 text-sm">
@@ -158,7 +103,7 @@ export const ClueBoard = (props: ClueBoardProps) => {
       ) : null}
 
       {!done ? (
-        <GuessInput onSubmit={submit} disabled={submitting} />
+        <GuessInput onSubmit={submit} disabled={pending} />
       ) : (
         <ResultPanel
           status={status}
@@ -173,6 +118,8 @@ export const ClueBoard = (props: ClueBoardProps) => {
     </div>
   );
 };
+
+type Clue = { type: string; value: string };
 
 type ClueStackProps = {
   clues: Clue[];
@@ -267,8 +214,4 @@ const buildEmojiRow = (status: "won" | "lost", count: number, max: number): stri
     for (let i = 0; i < max; i++) row += "⬛";
   }
   return row;
-};
-
-const extractAnswer = (g: PriorGuess): string | null => {
-  return g.result.nextClue?.answer ?? null;
 };

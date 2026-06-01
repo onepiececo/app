@@ -59,21 +59,10 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 
-	puzzle, err := h.games.GetByDate(ctx, gameID, today)
+	puzzle, _, err := games.EnsurePuzzleForDate(ctx, h.pool, engine, today)
 	if err != nil {
 		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "load_failed", Message: err.Error()})
 		return
-	}
-	if puzzle == nil {
-		if _, err := games.EnsurePuzzleForDate(ctx, h.pool, engine, today); err != nil {
-			apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "generate_failed", Message: err.Error()})
-			return
-		}
-		puzzle, err = h.games.GetByDate(ctx, gameID, today)
-		if err != nil || puzzle == nil {
-			apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "load_failed", Message: "puzzle missing after generate"})
-			return
-		}
 	}
 	// Never leak the answer key to clients.
 	puzzle.AnswerKey = nil

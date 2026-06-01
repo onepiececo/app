@@ -19,28 +19,29 @@ type SchedulerOptions struct {
 }
 
 // EnsurePuzzleForDate generates and stores the puzzle for the given date if missing.
-// Returns true when a new puzzle was created.
-func EnsurePuzzleForDate(ctx context.Context, pool *pgxpool.Pool, engine GameEngine, date time.Time) (bool, error) {
+// Returns the puzzle (existing or freshly generated) plus a flag indicating whether it was just created.
+func EnsurePuzzleForDate(ctx context.Context, pool *pgxpool.Pool, engine GameEngine, date time.Time) (*Puzzle, bool, error) {
 	store := NewStore(pool)
 	d := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 
 	existing, err := store.GetByDate(ctx, engine.GameID(), d)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	if existing != nil {
-		return false, nil
+		return existing, false, nil
 	}
 
 	seed := fmt.Sprintf("daily:%s:%s", engine.GameID(), d.Format("2006-01-02"))
 	draft, err := engine.GeneratePuzzle(ctx, seed)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
-	if _, err := store.UpsertPuzzle(ctx, engine.GameID(), &d, seed, "normal", draft); err != nil {
-		return false, err
+	p, err := store.UpsertPuzzle(ctx, engine.GameID(), &d, seed, "normal", draft)
+	if err != nil {
+		return nil, false, err
 	}
-	return true, nil
+	return p, true, nil
 }
 
 // StartScheduler runs every Interval. Each tick it walks BackfillDays back through tomorrow,
@@ -61,7 +62,7 @@ func StartScheduler(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 			for _, e := range opts.Engines {
 				generated := 0
 				for d := oldest; !d.After(latest); d = d.AddDate(0, 0, 1) {
-					created, err := EnsurePuzzleForDate(ctx, pool, e, d)
+					_, created, err := EnsurePuzzleForDate(ctx, pool, e, d)
 					if err != nil {
 						logger.Warn("puzzle generate failed", "game", e.GameID(), "date", d.Format("2006-01-02"), "error", err)
 						continue

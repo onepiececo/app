@@ -1,4 +1,5 @@
 import { Heading } from "@/components/ui/heading";
+import { getTodayPuzzle } from "@/app/actions/puzzles";
 import { WordleBoard } from "./wordle-board";
 
 export const metadata = {
@@ -6,7 +7,8 @@ export const metadata = {
   description: "Guess any anime. Each guess shows how close it is across seven categories.",
 };
 
-const Page = () => {
+const Page = async () => {
+  const initial = await getTodayPuzzle("wordle");
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10">
       <header className="flex flex-col gap-1">
@@ -15,7 +17,7 @@ const Page = () => {
           Type any anime, the grid shows how close it is across format, year, episodes, score, source, studios, and genres. Six guesses.
         </p>
       </header>
-      <WordleBoard />
+      <WordleBoard initial={initial.success ? initial.data : null} initialError={initial.success ? null : initial.error} />
     </main>
   );
 };

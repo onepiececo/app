@@ -111,34 +111,31 @@ func (e *WordleEngine) GeneratePuzzle(ctx context.Context, seed string) (PuzzleD
 	r := rand.New(rand.NewPCG(seedToUint64(seed), 0xBF58476D1CE4E5B9))
 	offset := r.IntN(count)
 
-	pickQuery := `
-		SELECT id, slug, title_primary, format, season_year, episodes, average_score, source
-		FROM anime
-		WHERE ` + baseFilter + ` AND NOT (id = ANY($2))
-		ORDER BY id
-		OFFSET $1 LIMIT 1
+	const selectCols = `
+		a.id, a.slug, a.title_primary, a.format, a.season_year, a.episodes, a.average_score, a.source,
+		COALESCE(
+			(SELECT array_agg(s.name ORDER BY asg.is_main DESC, s.id)
+			 FROM anime_studio asg JOIN studio s ON s.id = asg.studio_id
+			 WHERE asg.anime_id = a.id),
+			'{}'::text[]
+		) AS studios,
+		COALESCE(
+			(SELECT array_agg(g.name ORDER BY g.id)
+			 FROM anime_genre ag JOIN genre g ON g.id = ag.genre_id
+			 WHERE ag.anime_id = a.id),
+			'{}'::text[]
+		) AS genres
 	`
+
+	pickQuery := `SELECT ` + selectCols + ` FROM anime a WHERE ` + baseFilter + ` AND NOT (a.id = ANY($2)) ORDER BY a.id OFFSET $1 LIMIT 1`
 	args := []any{offset, used}
 	if fellBack {
-		pickQuery = `
-			SELECT id, slug, title_primary, format, season_year, episodes, average_score, source
-			FROM anime
-			WHERE ` + baseFilter + `
-			ORDER BY id
-			OFFSET $1 LIMIT 1
-		`
+		pickQuery = `SELECT ` + selectCols + ` FROM anime a WHERE ` + baseFilter + ` ORDER BY a.id OFFSET $1 LIMIT 1`
 		args = []any{offset}
 	}
 
 	var a wordleAnime
-	if err := e.pool.QueryRow(ctx, pickQuery, args...).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.Year, &a.Episodes, &a.Score, &a.Source); err != nil {
-		return PuzzleDraft{}, err
-	}
-
-	if a.Studios, err = e.fetchStudios(ctx, a.ID); err != nil {
-		return PuzzleDraft{}, err
-	}
-	if a.Genres, err = e.fetchGenres(ctx, a.ID); err != nil {
+	if err := e.pool.QueryRow(ctx, pickQuery, args...).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.Year, &a.Episodes, &a.Score, &a.Source, &a.Studios, &a.Genres); err != nil {
 		return PuzzleDraft{}, err
 	}
 
@@ -344,62 +341,31 @@ func (e *WordleEngine) usedAnswerIDs(ctx context.Context) ([]int64, error) {
 	return ids, rows.Err()
 }
 
+// fetchAnime pulls the anime row plus its studio and genre sets in a single query.
+// Previously this was three round trips, the array_agg collapses them.
 func (e *WordleEngine) fetchAnime(ctx context.Context, id int64) (*wordleAnime, error) {
 	var a wordleAnime
 	if err := e.pool.QueryRow(ctx, `
-		SELECT id, slug, title_primary, format, season_year, episodes, average_score, source
-		FROM anime WHERE id = $1
-	`, id).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.Year, &a.Episodes, &a.Score, &a.Source); err != nil {
-		return nil, err
-	}
-	var err error
-	if a.Studios, err = e.fetchStudios(ctx, id); err != nil {
-		return nil, err
-	}
-	if a.Genres, err = e.fetchGenres(ctx, id); err != nil {
+		SELECT
+			a.id, a.slug, a.title_primary, a.format, a.season_year, a.episodes, a.average_score, a.source,
+			COALESCE(
+				(SELECT array_agg(s.name ORDER BY asg.is_main DESC, s.id)
+				 FROM anime_studio asg
+				 JOIN studio s ON s.id = asg.studio_id
+				 WHERE asg.anime_id = a.id),
+				'{}'::text[]
+			) AS studios,
+			COALESCE(
+				(SELECT array_agg(g.name ORDER BY g.id)
+				 FROM anime_genre ag
+				 JOIN genre g ON g.id = ag.genre_id
+				 WHERE ag.anime_id = a.id),
+				'{}'::text[]
+			) AS genres
+		FROM anime a
+		WHERE a.id = $1
+	`, id).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.Year, &a.Episodes, &a.Score, &a.Source, &a.Studios, &a.Genres); err != nil {
 		return nil, err
 	}
 	return &a, nil
-}
-
-func (e *WordleEngine) fetchStudios(ctx context.Context, animeID int64) ([]string, error) {
-	rows, err := e.pool.Query(ctx, `
-		SELECT s.name FROM studio s
-		JOIN anime_studio asg ON asg.studio_id = s.id
-		WHERE asg.anime_id = $1
-		ORDER BY asg.is_main DESC, s.id
-	`, animeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make([]string, 0)
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err == nil {
-			out = append(out, v)
-		}
-	}
-	return out, rows.Err()
-}
-
-func (e *WordleEngine) fetchGenres(ctx context.Context, animeID int64) ([]string, error) {
-	rows, err := e.pool.Query(ctx, `
-		SELECT g.name FROM genre g
-		JOIN anime_genre ag ON ag.genre_id = g.id
-		WHERE ag.anime_id = $1
-		ORDER BY g.id
-	`, animeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make([]string, 0)
-	for rows.Next() {
-		var v string
-		if err := rows.Scan(&v); err == nil {
-			out = append(out, v)
-		}
-	}
-	return out, rows.Err()
 }
