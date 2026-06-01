@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -42,32 +43,26 @@ func main() {
 
 	switch os.Args[1] {
 	case "ingest":
-		if len(os.Args) < 3 {
-			usage()
-			os.Exit(2)
-		}
-		switch os.Args[2] {
-		case "anilist":
-			runIngestAniList(ctx, cfg, logger, os.Args[3:])
-		case "jikan":
-			runIngestJikan(ctx, cfg, logger, os.Args[3:])
-		default:
-			fmt.Fprintf(os.Stderr, "unknown ingest source: %s\n", os.Args[2])
-			usage()
-			os.Exit(2)
-		}
+		runIngest(ctx, cfg, logger, os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
 	}
 }
 
-func runIngestAniList(ctx context.Context, cfg *config.Config, logger *slog.Logger, args []string) {
-	fs := flag.NewFlagSet("ingest anilist", flag.ExitOnError)
-	pages := fs.Int("pages", 5, "max pages to crawl per iteration (1 page = up to 50 anime)")
-	rpm := fs.Int("rpm", 25, "requests per minute, keep under 30")
-	perPage := fs.Int("per-page", 50, "items per page, max 50")
-	interval := fs.Duration("interval", time.Hour, "duration between iterations, set 0 for a single shot run")
+func runIngest(ctx context.Context, cfg *config.Config, logger *slog.Logger, args []string) {
+	fs := flag.NewFlagSet("ingest", flag.ExitOnError)
+	once := fs.Bool("once", false, "run one pass of every source then exit")
+
+	anilistPages := fs.Int("anilist-pages", 5, "AniList max pages per pass, 1 page = up to 50 anime")
+	anilistRPM := fs.Int("anilist-rpm", 25, "AniList requests per minute, keep under 30")
+	anilistInterval := fs.Duration("anilist-interval", time.Hour, "AniList sleep between passes")
+
+	jikanBatch := fs.Int("jikan-batch", 50, "Jikan candidates per pass")
+	jikanRPM := fs.Int("jikan-rpm", 60, "Jikan requests per minute, caps at 60")
+	jikanPerSec := fs.Int("jikan-per-sec", 3, "Jikan requests per second hard cap, caps at 3")
+	jikanInterval := fs.Duration("jikan-interval", 30*time.Minute, "Jikan sleep between passes")
+
 	if err := fs.Parse(args); err != nil {
 		os.Exit(2)
 	}
@@ -75,39 +70,43 @@ func runIngestAniList(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	pool := connectPool(ctx, cfg, logger)
 	defer pool.Close()
 
-	run := func() error {
+	anilistRun := func() error {
 		return ingest.RunAniListOnce(ctx, pool, logger, ingest.AniListRunOptions{
-			PerPage:  *perPage,
-			MaxPages: *pages,
-			RPMLimit: *rpm,
+			PerPage:  50,
+			MaxPages: *anilistPages,
+			RPMLimit: *anilistRPM,
 		})
 	}
 
-	loopForever(ctx, logger, "anilist", *interval, run)
-}
-
-func runIngestJikan(ctx context.Context, cfg *config.Config, logger *slog.Logger, args []string) {
-	fs := flag.NewFlagSet("ingest jikan", flag.ExitOnError)
-	batch := fs.Int("batch", 50, "candidates to enrich per iteration")
-	rpm := fs.Int("rpm", 60, "requests per minute, Jikan caps at 60")
-	perSec := fs.Int("per-sec", 3, "requests per second, Jikan caps at 3")
-	interval := fs.Duration("interval", 30*time.Minute, "duration between iterations, set 0 for a single shot run")
-	if err := fs.Parse(args); err != nil {
-		os.Exit(2)
-	}
-
-	pool := connectPool(ctx, cfg, logger)
-	defer pool.Close()
-
-	run := func() error {
+	jikanRun := func() error {
 		return ingest.RunJikanOnce(ctx, pool, logger, ingest.JikanRunOptions{
-			Batch:     *batch,
-			RPMLimit:  *rpm,
-			PerSecond: *perSec,
+			Batch:     *jikanBatch,
+			RPMLimit:  *jikanRPM,
+			PerSecond: *jikanPerSec,
 		})
 	}
 
-	loopForever(ctx, logger, "jikan", *interval, run)
+	if *once {
+		if err := anilistRun(); err != nil {
+			logger.Error("anilist run failed", "error", err)
+		}
+		if err := jikanRun(); err != nil {
+			logger.Error("jikan run failed", "error", err)
+		}
+		return
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		loopForever(ctx, logger, "anilist", *anilistInterval, anilistRun)
+	}()
+	go func() {
+		defer wg.Done()
+		loopForever(ctx, logger, "jikan", *jikanInterval, jikanRun)
+	}()
+	wg.Wait()
 }
 
 // loopForever runs fn once, exits if interval is zero, otherwise sleeps and repeats until ctx cancels.
@@ -116,9 +115,6 @@ func loopForever(ctx context.Context, logger *slog.Logger, source string, interv
 		err := fn()
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error(source+" run failed", "error", err)
-			if interval <= 0 {
-				os.Exit(1)
-			}
 		}
 
 		if interval <= 0 {
@@ -149,9 +145,8 @@ func connectPool(ctx context.Context, cfg *config.Config, logger *slog.Logger) *
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: onepiece-cli <command> [args]")
 	fmt.Fprintln(os.Stderr, "commands:")
-	fmt.Fprintln(os.Stderr, "  ingest anilist [--pages N] [--rpm N] [--per-page N] [--interval D]")
-	fmt.Fprintln(os.Stderr, "  ingest jikan   [--batch N] [--rpm N] [--per-sec N] [--interval D]")
+	fmt.Fprintln(os.Stderr, "  ingest [--once] [--anilist-* ...] [--jikan-* ...]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "anilist defaults to one pass per hour, jikan to one pass per 30 minutes")
-	fmt.Fprintln(os.Stderr, "pass --interval 0 for a single shot, Ctrl+C exits cleanly from a loop")
+	fmt.Fprintln(os.Stderr, "default loops forever, AniList every hour, Jikan every 30 minutes")
+	fmt.Fprintln(os.Stderr, "pass --once for a single pass of each source, Ctrl+C exits cleanly")
 }

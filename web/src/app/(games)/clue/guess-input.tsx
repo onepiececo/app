@@ -38,7 +38,7 @@ export const GuessInput = (props: GuessInputProps) => {
     setLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const res = await serverJSON<Hit[]>(`/v1/anime/search?q=${encodeURIComponent(value)}&limit=8`);
+        const res = await serverJSON<Hit[]>(`/v1/anime?q=${encodeURIComponent(value)}&limit=8`);
         if (!cancelled) {
           setHits(res);
           setHighlighted(0);

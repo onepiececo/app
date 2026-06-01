@@ -21,19 +21,13 @@ Migrations run on server boot, both services share the Postgres at `localhost:54
 
 ## Populating the Catalog
 
-The puzzle generator needs anime, so pull the top 250 most popular non-adult titles from AniList in one shot.
+One command pulls AniList every hour and runs Jikan enrichment every 30 minutes, both throttled to their published rate limits.
 
 ```bash
-cd server && go run ./cmd/onepiece-cli ingest anilist --pages=5
+cd server && go run ./cmd/onepiece-cli ingest
 ```
 
-Layer Jikan on top to fill `mal_rank`, `mal_members`, and synonym aliases like SnK or FMAB.
-
-```bash
-cd server && go run ./cmd/onepiece-cli ingest jikan --batch=50
-```
-
-Flip `INGEST_ANILIST_ENABLED=true` and `INGEST_JIKAN_ENABLED=true` in `server/.env` to have the long-running server schedule both jobs at 24h and 12h cadences.
+Pass `--once` for a single pass of each source and exit, or override any tuning via `--anilist-pages`, `--anilist-interval`, `--jikan-batch`, `--jikan-interval`, etc.
 
 ## How It Works
 
@@ -48,7 +42,7 @@ curl http://localhost:8080/v1/puzzles/today?game=clue
 Search anime by alias or prefix, matched through exact alias then prefix then trigram similarity with popularity as the tiebreak.
 
 ```bash
-curl 'http://localhost:8080/v1/anime/search?q=jjk&limit=5'
+curl 'http://localhost:8080/v1/anime?q=jjk&limit=5'
 ```
 
 Submit a guess, the attempt auto starts and anonymous identity comes from `X-Anonymous-Key`.
@@ -57,7 +51,7 @@ Submit a guess, the attempt auto starts and anonymous identity comes from `X-Ano
 curl -X POST -H "X-Anonymous-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
   -d '{"rawGuess":"Code Geass","animeId":50}' \
-  http://localhost:8080/v1/puzzles/1/guess
+  http://localhost:8080/v1/puzzles/1/guesses
 ```
 
 Better Auth's `jwt()` plugin writes EdDSA keys to the `jwks` table, the Go server polls every five minutes and builds a `keyfunc` so any Bearer token verifies without a round trip back to Next.js.
@@ -66,8 +60,7 @@ Better Auth's `jwt()` plugin writes EdDSA keys to the `jwks` table, the Go serve
 
 The Go server exposes four scopes of routes.
 
-- Public, `/healthz`, `/v1/anime/search`, `/v1/anime/{slug}`, `/v1/puzzles/today`
-- Anonymous or signed in, `/v1/players/me`, `/v1/puzzles/{id}/guess`, `/v1/puzzles/{id}/complete`, send either `Authorization: Bearer <jwt>` or `X-Anonymous-Key: <random>`
+- Public, `/healthz`, `/v1/anime`, `/v1/anime/{slug}`, `/v1/puzzles/today`
+- Anonymous or signed in, `/v1/players/me`, `/v1/puzzles/{id}/guesses`, `/v1/puzzles/{id}/complete`, send either `Authorization: Bearer <jwt>` or `X-Anonymous-Key: <random>`
 - Signed in only, `/v1/me`, requires a valid Better Auth JWT
-- CLI only, `onepiece-cli ingest anilist|jikan` for one shot population
-
+- CLI only, `onepiece-cli ingest` for catalog population

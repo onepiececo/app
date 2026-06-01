@@ -41,13 +41,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	mux.HandleFunc("GET /healthz", handlers.Health)
 
-	mux.HandleFunc("GET /v1/anime/search", animeH.Search)
+	mux.HandleFunc("GET /v1/anime", animeH.Search)
 	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
 
 	mux.HandleFunc("GET /v1/players/me", playerH.Me)
 
 	mux.HandleFunc("GET /v1/puzzles/today", puzzleH.Today)
-	mux.HandleFunc("POST /v1/puzzles/{id}/guess", puzzleH.Guess)
+	mux.HandleFunc("POST /v1/puzzles/{id}/guesses", puzzleH.Guess)
 	mux.HandleFunc("POST /v1/puzzles/{id}/complete", puzzleH.Complete)
 
 	authed("GET /v1/me", handlers.Me)

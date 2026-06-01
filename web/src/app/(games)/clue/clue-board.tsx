@@ -105,7 +105,7 @@ export const ClueBoard = (props: ClueBoardProps) => {
     setSubmitting(true);
     setErrorText(null);
     try {
-      const res = await serverFetch(`/v1/puzzles/${puzzle.id}/guess`, {
+      const res = await serverFetch(`/v1/puzzles/${puzzle.id}/guesses`, {
         method: "POST",
         headers: { "X-Anonymous-Key": anonKey.current },
         body: JSON.stringify({ rawGuess: raw, animeId }),
