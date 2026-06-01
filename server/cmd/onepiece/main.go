@@ -17,7 +17,6 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/config"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/games"
-	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
 
@@ -53,32 +52,15 @@ func main() {
 	}
 	go jwks.StartRefresh(ctx, 5*time.Minute)
 
-	if cfg.IngestAniListEnabled {
-		ingest.StartAniListSchedule(ctx, pool, logger, cfg.IngestAniListInterval, ingest.AniListRunOptions{
-			PerPage:  50,
-			MaxPages: cfg.IngestAniListMaxPages,
-			RPMLimit: cfg.IngestAniListRPM,
-		})
-		logger.Info("anilist schedule enabled", "interval", cfg.IngestAniListInterval, "max_pages", cfg.IngestAniListMaxPages, "rpm", cfg.IngestAniListRPM)
-	}
-
-	if cfg.IngestJikanEnabled {
-		ingest.StartJikanSchedule(ctx, pool, logger, cfg.IngestJikanInterval, ingest.JikanRunOptions{
-			Batch:     cfg.IngestJikanBatch,
-			RPMLimit:  60,
-			PerSecond: 3,
-		})
-		logger.Info("jikan schedule enabled", "interval", cfg.IngestJikanInterval, "batch", cfg.IngestJikanBatch)
-	}
-
 	clueEngine := games.NewClueEngine(pool)
 	engines := map[string]games.GameEngine{
 		clueEngine.GameID(): clueEngine,
 	}
 
 	games.StartScheduler(ctx, pool, logger, games.SchedulerOptions{
-		Interval: time.Hour,
-		Engines:  []games.GameEngine{clueEngine},
+		Interval:      time.Hour,
+		BackfillDays:  cfg.PuzzleBackfillDays,
+		Engines:       []games.GameEngine{clueEngine},
 	})
 
 	router := api.NewRouter(api.RouterConfig{

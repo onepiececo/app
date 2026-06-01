@@ -195,25 +195,3 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 	return nil
 }
 
-// StartJikanSchedule kicks off the first run 60s after boot, then every interval.
-func StartJikanSchedule(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, interval time.Duration, opts JikanRunOptions) {
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(60 * time.Second):
-		}
-
-		for {
-			if err := RunJikanOnce(ctx, pool, logger, opts); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Error("jikan scheduled run failed", "error", err)
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(interval):
-			}
-		}
-	}()
-}

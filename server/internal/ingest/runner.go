@@ -117,25 +117,3 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 	return nil
 }
 
-// StartAniListSchedule kicks off the first run 30s after boot, then every interval.
-func StartAniListSchedule(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, interval time.Duration, opts AniListRunOptions) {
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(30 * time.Second):
-		}
-
-		for {
-			if err := RunAniListOnce(ctx, pool, logger, opts); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Error("anilist scheduled run failed", "error", err)
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(interval):
-			}
-		}
-	}()
-}

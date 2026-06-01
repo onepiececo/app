@@ -59,36 +59,59 @@ type clueAnime struct {
 }
 
 func (e *ClueEngine) GeneratePuzzle(ctx context.Context, seed string) (PuzzleDraft, error) {
+	used, err := e.usedAnswerIDs(ctx)
+	if err != nil {
+		return PuzzleDraft{}, fmt.Errorf("load used answers: %w", err)
+	}
+
+	const baseFilter = `
+		is_game_eligible = true
+		AND is_adult = false
+		AND popularity >= 5000
+		AND format IN ('TV','TV_SHORT','MOVIE','OVA','ONA')
+		AND title_primary IS NOT NULL
+	`
+
 	var count int
-	if err := e.pool.QueryRow(ctx, `
-		SELECT count(*) FROM anime
-		WHERE is_game_eligible = true
-		  AND is_adult = false
-		  AND popularity >= 5000
-		  AND format IN ('TV','TV_SHORT','MOVIE','OVA','ONA')
-		  AND title_primary IS NOT NULL
-	`).Scan(&count); err != nil {
+	if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM anime WHERE `+baseFilter+` AND NOT (id = ANY($1))`, used).Scan(&count); err != nil {
 		return PuzzleDraft{}, err
 	}
+	fellBack := false
 	if count == 0 {
-		return PuzzleDraft{}, errors.New("no eligible anime, run the AniList ingest first")
+		if err := e.pool.QueryRow(ctx, `SELECT count(*) FROM anime WHERE `+baseFilter).Scan(&count); err != nil {
+			return PuzzleDraft{}, err
+		}
+		if count == 0 {
+			return PuzzleDraft{}, errors.New("no eligible anime, run the AniList ingest first")
+		}
+		fellBack = true
 	}
 
 	r := rand.New(rand.NewPCG(seedToUint64(seed), 0x9E3779B97F4A7C15))
 	offset := r.IntN(count)
 
-	var a clueAnime
-	if err := e.pool.QueryRow(ctx, `
+	pickQuery := `
 		SELECT id, slug, title_primary, format, season_year, episodes, popularity, cover_color
 		FROM anime
-		WHERE is_game_eligible = true
-		  AND is_adult = false
-		  AND popularity >= 5000
-		  AND format IN ('TV','TV_SHORT','MOVIE','OVA','ONA')
-		  AND title_primary IS NOT NULL
+		WHERE ` + baseFilter + `
+		  AND NOT (id = ANY($2))
 		ORDER BY id
 		OFFSET $1 LIMIT 1
-	`, offset).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.SeasonYear, &a.Episodes, &a.Popularity, &a.CoverColor); err != nil {
+	`
+	args := []any{offset, used}
+	if fellBack {
+		pickQuery = `
+			SELECT id, slug, title_primary, format, season_year, episodes, popularity, cover_color
+			FROM anime
+			WHERE ` + baseFilter + `
+			ORDER BY id
+			OFFSET $1 LIMIT 1
+		`
+		args = []any{offset}
+	}
+
+	var a clueAnime
+	if err := e.pool.QueryRow(ctx, pickQuery, args...).Scan(&a.ID, &a.Slug, &a.Title, &a.Format, &a.SeasonYear, &a.Episodes, &a.Popularity, &a.CoverColor); err != nil {
 		return PuzzleDraft{}, err
 	}
 
@@ -279,5 +302,27 @@ func seedToUint64(seed string) uint64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(seed))
 	return h.Sum64()
+}
+
+// usedAnswerIDs returns every anime that has already appeared as a Daily Anime Clue answer.
+// Returns an empty slice (not nil) so it composes cleanly with `NOT (id = ANY($1))`.
+func (e *ClueEngine) usedAnswerIDs(ctx context.Context) ([]int64, error) {
+	rows, err := e.pool.Query(ctx, `
+		SELECT (answer_key->>'animeId')::bigint
+		FROM puzzle
+		WHERE game_id = $1 AND answer_key ? 'animeId'
+	`, ClueGameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, rows.Err()
 }
 

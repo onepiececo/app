@@ -1,10 +1,6 @@
 package config
 
-import (
-	"time"
-
-	"github.com/caarlos0/env/v11"
-)
+import "github.com/caarlos0/env/v11"
 
 type Config struct {
 	DatabaseURL string `env:"DATABASE_URL,required"`
@@ -14,16 +10,9 @@ type Config struct {
 	LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat   string `env:"LOG_FORMAT" envDefault:"json"`
 
-	// AniList ingestion is opt in so dev restarts don't crawl AniList.
-	// Use the onepiece-cli subcommand for one shot runs.
-	IngestAniListEnabled  bool          `env:"INGEST_ANILIST_ENABLED" envDefault:"false"`
-	IngestAniListInterval time.Duration `env:"INGEST_ANILIST_INTERVAL" envDefault:"24h"`
-	IngestAniListMaxPages int           `env:"INGEST_ANILIST_MAX_PAGES" envDefault:"20"`
-	IngestAniListRPM      int           `env:"INGEST_ANILIST_RPM" envDefault:"25"`
-
-	IngestJikanEnabled  bool          `env:"INGEST_JIKAN_ENABLED" envDefault:"false"`
-	IngestJikanInterval time.Duration `env:"INGEST_JIKAN_INTERVAL" envDefault:"12h"`
-	IngestJikanBatch    int           `env:"INGEST_JIKAN_BATCH" envDefault:"200"`
+	// PuzzleBackfillDays controls how far back the puzzle scheduler generates history on each tick.
+	// 30 means new players can replay the last month of puzzles. Ingestion lives in the onepiece-cli binary.
+	PuzzleBackfillDays int `env:"PUZZLE_BACKFILL_DAYS" envDefault:"30"`
 }
 
 func Load() (*Config, error) {

@@ -9,14 +9,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// SchedulerOptions controls how the daily puzzle generator runs.
 type SchedulerOptions struct {
-	Interval time.Duration // how often to poll for missing puzzles
-	Engines  []GameEngine  // one entry per active game
+	// Interval is how often the scheduler wakes to top up missing puzzles.
+	Interval time.Duration
+	// BackfillDays generates puzzles for the last N days so new players can replay history.
+	BackfillDays int
+	// Engines is one entry per active game.
+	Engines []GameEngine
 }
 
 // EnsurePuzzleForDate generates and stores the puzzle for the given date if missing.
-// Returns true if a new puzzle was created.
+// Returns true when a new puzzle was created.
 func EnsurePuzzleForDate(ctx context.Context, pool *pgxpool.Pool, engine GameEngine, date time.Time) (bool, error) {
 	store := NewStore(pool)
 	d := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
@@ -40,25 +43,36 @@ func EnsurePuzzleForDate(ctx context.Context, pool *pgxpool.Pool, engine GameEng
 	return true, nil
 }
 
-// StartScheduler runs every Interval. Each tick it ensures today's and tomorrow's puzzle exist for each engine.
+// StartScheduler runs every Interval. Each tick it walks BackfillDays back through tomorrow,
+// generating any missing puzzles in chronological order so the answer exclusion logic in each engine
+// sees the older days first.
 func StartScheduler(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts SchedulerOptions) {
 	if opts.Interval <= 0 {
 		opts.Interval = time.Hour
 	}
+	if opts.BackfillDays < 0 {
+		opts.BackfillDays = 0
+	}
 	go func() {
 		runOnce := func() {
 			now := time.Now().UTC()
-			tomorrow := now.Add(24 * time.Hour)
+			oldest := now.AddDate(0, 0, -opts.BackfillDays)
+			latest := now.AddDate(0, 0, 1)
 			for _, e := range opts.Engines {
-				for _, day := range []time.Time{now, tomorrow} {
-					created, err := EnsurePuzzleForDate(ctx, pool, e, day)
+				generated := 0
+				for d := oldest; !d.After(latest); d = d.AddDate(0, 0, 1) {
+					created, err := EnsurePuzzleForDate(ctx, pool, e, d)
 					if err != nil {
-						logger.Warn("puzzle generate failed", "game", e.GameID(), "date", day.Format("2006-01-02"), "error", err)
+						logger.Warn("puzzle generate failed", "game", e.GameID(), "date", d.Format("2006-01-02"), "error", err)
 						continue
 					}
 					if created {
-						logger.Info("puzzle generated", "game", e.GameID(), "date", day.Format("2006-01-02"))
+						generated++
+						logger.Info("puzzle generated", "game", e.GameID(), "date", d.Format("2006-01-02"))
 					}
+				}
+				if generated == 0 {
+					logger.Debug("puzzle scheduler, no gaps", "game", e.GameID(), "backfill_days", opts.BackfillDays)
 				}
 			}
 		}
