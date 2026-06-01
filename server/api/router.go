@@ -11,6 +11,7 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/middleware"
+	"github.com/kgrahammatzen/onepiece-server/internal/player"
 )
 
 type RouterConfig struct {
@@ -24,7 +25,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
 	animeStore := anime.NewStore(cfg.Pool)
+	playerStore := player.NewStore(cfg.Pool)
 	animeH := handlers.NewAnimeHandler(animeStore)
+	playerH := handlers.NewPlayerHandler(playerStore, cfg.JWKS)
 
 	jwksAuth := auth.JWKSAuth(cfg.JWKS)
 	authed := func(pattern string, fn http.HandlerFunc) {
@@ -34,6 +37,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /healthz", handlers.Health)
 	mux.HandleFunc("GET /v1/anime/search", animeH.Search)
 	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
+	mux.HandleFunc("GET /v1/players/me", playerH.Me)
 	authed("GET /v1/me", handlers.Me)
 
 	mux.HandleFunc("/", notFound)

@@ -1,4 +1,5 @@
-import { bigint, bigserial, boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, date, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Better Auth core tables.
 // The Go server owns the migrations under server/store/migrations.
@@ -257,4 +258,108 @@ export const sourceIdMap = pgTable(
     pk: primaryKey({ columns: [t.source, t.sourceId] }),
     animeUnique: unique().on(t.animeId, t.source),
   }),
+);
+
+// Player identity. Owned by 004_player.up.sql.
+
+export const userProfile = pgTable("user_profile", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  username: text("username").unique(),
+  displayName: text("display_name"),
+  avatarUrl: text("avatar_url"),
+  timezone: text("timezone").notNull().default("America/New_York"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const anonymousPlayer = pgTable("anonymous_player", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  anonymousKeyHash: text("anonymous_key_hash").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const playerIdentity = pgTable("player_identity", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  anonymousPlayerId: uuid("anonymous_player_id").references(() => anonymousPlayer.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Games. Owned by 005_games.up.sql.
+
+export const game = pgTable("game", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const puzzle = pgTable(
+  "puzzle",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => game.id),
+    puzzleDate: date("puzzle_date"),
+    seed: text("seed").notNull(),
+    difficulty: text("difficulty").notNull().default("normal"),
+    payload: jsonb("payload").notNull(),
+    answerKey: jsonb("answer_key").notNull(),
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({ uniq: unique().on(t.gameId, t.puzzleDate) }),
+);
+
+export const puzzleAttempt = pgTable(
+  "puzzle_attempt",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    puzzleId: bigint("puzzle_id", { mode: "number" })
+      .notNull()
+      .references(() => puzzle.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => playerIdentity.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("started"),
+    score: integer("score").notNull().default(0),
+    guessesCount: integer("guesses_count").notNull().default(0),
+    durationMs: integer("duration_ms"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (t) => ({ uniq: unique().on(t.puzzleId, t.playerId) }),
+);
+
+export const puzzleGuess = pgTable("puzzle_guess", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  attemptId: bigint("attempt_id", { mode: "number" })
+    .notNull()
+    .references(() => puzzleAttempt.id, { onDelete: "cascade" }),
+  animeId: bigint("anime_id", { mode: "number" }).references(() => anime.id),
+  rawGuess: text("raw_guess").notNull(),
+  normalizedGuess: text("normalized_guess").notNull(),
+  result: jsonb("result").notNull(),
+  position: integer("position").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const puzzleAnswerStats = pgTable(
+  "puzzle_answer_stats",
+  {
+    puzzleId: bigint("puzzle_id", { mode: "number" })
+      .notNull()
+      .references(() => puzzle.id, { onDelete: "cascade" }),
+    answerSlot: text("answer_slot").notNull(),
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id),
+    correctCount: integer("correct_count").notNull().default(0),
+    totalCount: integer("total_count").notNull().default(0),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.puzzleId, t.answerSlot, t.animeId] }) }),
 );
