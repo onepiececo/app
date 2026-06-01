@@ -172,7 +172,13 @@ func (e *ClueEngine) ScoreAttempt(ctx context.Context, state AttemptState) (int,
 			break
 		}
 	}
-	score := max(100-(used-1)*15, 10)
+	pop, _ := lookupAnswerPopularity(ctx, e.pool, state.PuzzleID)
+	score, _ := StandardScore(ScoreInput{
+		GuessesUsed:      used,
+		DurationMS:       state.EndedAt - state.StartedAt,
+		AnswerPopularity: pop,
+		Won:              true,
+	})
 	return score, nil
 }
 

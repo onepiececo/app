@@ -151,9 +151,12 @@ func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Status == "won" || result.Status == "lost" {
+		end := time.Now()
+		duration := max(int(end.Sub(attempt.CreatedAt).Milliseconds()), 0)
 		state := h.attemptState(ctx, puzzle.ID, attempt.ID, result.Status)
+		state.StartedAt = attempt.CreatedAt.UnixMilli()
+		state.EndedAt = end.UnixMilli()
 		score, _ := engine.ScoreAttempt(ctx, state)
-		duration := int(time.Since(attempt.CreatedAt).Milliseconds())
 		_ = h.games.CompleteAttempt(ctx, attempt.ID, result.Status, score, duration)
 	}
 

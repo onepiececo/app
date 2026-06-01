@@ -213,7 +213,14 @@ func (e *WordleEngine) ScoreAttempt(ctx context.Context, state AttemptState) (in
 			break
 		}
 	}
-	return max(100-(used-1)*15, 10), nil
+	pop, _ := lookupAnswerPopularity(ctx, e.pool, state.PuzzleID)
+	score, _ := StandardScore(ScoreInput{
+		GuessesUsed:      used,
+		DurationMS:       state.EndedAt - state.StartedAt,
+		AnswerPopularity: pop,
+		Won:              true,
+	})
+	return score, nil
 }
 
 func (e *WordleEngine) BuildShare(ctx context.Context, state AttemptState) SharePayload {
