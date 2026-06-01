@@ -15,6 +15,7 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/api"
 	"github.com/kgrahammatzen/onepiece-server/config"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
 
@@ -50,7 +51,17 @@ func main() {
 	}
 	go jwks.StartRefresh(ctx, 5*time.Minute)
 
+	if cfg.IngestAniListEnabled {
+		ingest.StartAniListSchedule(ctx, pool, logger, cfg.IngestAniListInterval, ingest.AniListRunOptions{
+			PerPage:  50,
+			MaxPages: cfg.IngestAniListMaxPages,
+			RPMLimit: cfg.IngestAniListRPM,
+		})
+		logger.Info("anilist schedule enabled", "interval", cfg.IngestAniListInterval, "max_pages", cfg.IngestAniListMaxPages, "rpm", cfg.IngestAniListRPM)
+	}
+
 	router := api.NewRouter(api.RouterConfig{
+		Pool:   pool,
 		JWKS:   jwks,
 		Logger: logger,
 		WebURL: cfg.WebURL,

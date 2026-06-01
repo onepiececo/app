@@ -4,13 +4,17 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/kgrahammatzen/onepiece-server/api/handlers"
+	"github.com/kgrahammatzen/onepiece-server/internal/anime"
 	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/middleware"
 )
 
 type RouterConfig struct {
+	Pool   *pgxpool.Pool
 	JWKS   *auth.JWKSStore
 	Logger *slog.Logger
 	WebURL string
@@ -19,12 +23,17 @@ type RouterConfig struct {
 func NewRouter(cfg RouterConfig) http.Handler {
 	mux := http.NewServeMux()
 
+	animeStore := anime.NewStore(cfg.Pool)
+	animeH := handlers.NewAnimeHandler(animeStore)
+
 	jwksAuth := auth.JWKSAuth(cfg.JWKS)
 	authed := func(pattern string, fn http.HandlerFunc) {
 		mux.Handle(pattern, wrap(fn, jwksAuth))
 	}
 
 	mux.HandleFunc("GET /healthz", handlers.Health)
+	mux.HandleFunc("GET /v1/anime/search", animeH.Search)
+	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
 	authed("GET /v1/me", handlers.Me)
 
 	mux.HandleFunc("/", notFound)

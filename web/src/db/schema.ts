@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, bigserial, boolean, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 // Better Auth core tables.
 // The Go server owns the migrations under server/store/migrations.
@@ -62,3 +62,152 @@ export const jwks = pgTable("jwks", {
   createdAt: timestamp("created_at").notNull(),
   expiresAt: timestamp("expires_at"),
 });
+
+// Anime index. Owned by 002_anime_index.up.sql.
+
+export const anime = pgTable("anime", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  slug: text("slug").notNull().unique(),
+
+  titlePrimary: text("title_primary").notNull(),
+  titleRomaji: text("title_romaji"),
+  titleEnglish: text("title_english"),
+  titleNative: text("title_native"),
+
+  format: text("format"),
+  status: text("status"),
+  season: text("season"),
+  seasonYear: integer("season_year"),
+  episodes: integer("episodes"),
+  durationMinutes: integer("duration_minutes"),
+
+  averageScore: integer("average_score"),
+  meanScore: integer("mean_score"),
+  popularity: integer("popularity").notNull().default(0),
+  favourites: integer("favourites").notNull().default(0),
+
+  isAdult: boolean("is_adult").notNull().default(false),
+  isGameEligible: boolean("is_game_eligible").notNull().default(true),
+
+  coverSourceUrl: text("cover_source_url"),
+  bannerSourceUrl: text("banner_source_url"),
+  coverColor: text("cover_color"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const animeAlias = pgTable(
+  "anime_alias",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    alias: text("alias").notNull(),
+    normalizedAlias: text("normalized_alias").notNull(),
+    source: text("source").notNull(),
+    priority: integer("priority").notNull().default(100),
+  },
+  (t) => ({
+    aliasUnique: unique().on(t.animeId, t.normalizedAlias),
+  }),
+);
+
+export const studio = pgTable("studio", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  source: text("source"),
+  sourceId: text("source_id"),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+});
+
+export const animeStudio = pgTable(
+  "anime_studio",
+  {
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    studioId: bigint("studio_id", { mode: "number" })
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    isMain: boolean("is_main").notNull().default(false),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.animeId, t.studioId] }) }),
+);
+
+export const tag = pgTable("tag", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  source: text("source"),
+  sourceId: text("source_id"),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  category: text("category"),
+  isSpoiler: boolean("is_spoiler").notNull().default(false),
+  isAdult: boolean("is_adult").notNull().default(false),
+});
+
+export const animeTag = pgTable(
+  "anime_tag",
+  {
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    tagId: bigint("tag_id", { mode: "number" })
+      .notNull()
+      .references(() => tag.id, { onDelete: "cascade" }),
+    rank: integer("rank"),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.animeId, t.tagId] }) }),
+);
+
+export const genre = pgTable("genre", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: text("name").notNull().unique(),
+});
+
+export const animeGenre = pgTable(
+  "anime_genre",
+  {
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    genreId: bigint("genre_id", { mode: "number" })
+      .notNull()
+      .references(() => genre.id, { onDelete: "cascade" }),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.animeId, t.genreId] }) }),
+);
+
+export const animeRelation = pgTable("anime_relation", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  fromAnimeId: bigint("from_anime_id", { mode: "number" })
+    .notNull()
+    .references(() => anime.id, { onDelete: "cascade" }),
+  toAnimeId: bigint("to_anime_id", { mode: "number" }).references(() => anime.id, { onDelete: "set null" }),
+  externalToSource: text("external_to_source"),
+  externalToId: text("external_to_id"),
+  relationType: text("relation_type").notNull(),
+});
+
+export const animeAsset = pgTable(
+  "anime_asset",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    animeId: bigint("anime_id", { mode: "number" })
+      .notNull()
+      .references(() => anime.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    source: text("source").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    cdnUrl: text("cdn_url"),
+    width: integer("width"),
+    height: integer("height"),
+    dominantColor: text("dominant_color"),
+    blurhash: text("blurhash"),
+    status: text("status").notNull().default("remote"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({ assetUnique: unique().on(t.animeId, t.kind, t.source) }),
+);
