@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
     turbopackFileSystemCacheForBuild: true,
     optimizePackageImports: ["@phosphor-icons/react"],
   },
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "s4.anilist.co" },
+    ],
+  },
 };
 
 export default nextConfig;
