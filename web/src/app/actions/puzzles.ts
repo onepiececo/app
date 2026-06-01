@@ -14,11 +14,20 @@ export type Puzzle = {
   };
 };
 
+export type ScoreBreakdown = {
+  base: number;
+  multiplier: number;
+  speedBonus: number;
+  tier: string;
+  total: number;
+};
+
 export type Attempt = {
   id: number;
   status: "started" | "won" | "lost";
   score: number;
   guessesCount: number;
+  breakdown?: ScoreBreakdown;
 };
 
 export type PriorGuess = {

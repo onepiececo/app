@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getAnonymousKey } from "@/lib/anonymous-key";
 import { GuessInput } from "@/components/games/guess-input";
-import { getTodayPuzzle, submitGuess, type TodayResponse, type PriorGuess, type Puzzle, type Attempt } from "@/app/actions/puzzles";
+import { ScoreBreakdownRow } from "@/components/games/score-breakdown";
+import { getTodayPuzzle, submitGuess, type TodayResponse, type PriorGuess, type Puzzle, type Attempt, type ScoreBreakdown } from "@/app/actions/puzzles";
 
 type ClueBoardProps = {
   initial: TodayResponse | null;
@@ -111,6 +112,7 @@ export const ClueBoard = (props: ClueBoardProps) => {
           guessCount={attempt?.guessesCount ?? 0}
           maxGuesses={puzzle.payload.maxGuesses}
           revealed={revealed}
+          breakdown={attempt?.breakdown}
         />
       )}
 
@@ -160,6 +162,7 @@ type ResultPanelProps = {
   guessCount: number;
   maxGuesses: number;
   revealed: string | null;
+  breakdown?: ScoreBreakdown;
 };
 
 const ResultPanel = (props: ResultPanelProps) => {
@@ -189,6 +192,7 @@ const ResultPanel = (props: ResultPanelProps) => {
           copy share
         </Button>
       </div>
+      {props.breakdown && props.status === "won" ? <ScoreBreakdownRow breakdown={props.breakdown} /> : null}
     </div>
   );
 };

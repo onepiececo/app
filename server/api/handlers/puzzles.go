@@ -75,6 +75,16 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 		if err == nil && attempt != nil {
 			resp.Attempt = attempt
 			resp.Guesses = h.loadGuesses(ctx, attempt.ID)
+			if attempt.Status != "started" {
+				state := h.attemptState(ctx, puzzle.ID, attempt.ID, attempt.Status)
+				state.StartedAt = attempt.CreatedAt.UnixMilli()
+				if attempt.CompletedAt != nil {
+					state.EndedAt = attempt.CompletedAt.UnixMilli()
+				}
+				if bd, err := games.BuildBreakdown(ctx, h.pool, state); err == nil {
+					attempt.Breakdown = &bd
+				}
+			}
 		}
 	}
 

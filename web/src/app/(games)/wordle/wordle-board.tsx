@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { getAnonymousKey } from "@/lib/anonymous-key";
 import { GuessInput } from "@/components/games/guess-input";
-import { getTodayPuzzle, submitGuess, type TodayResponse } from "@/app/actions/puzzles";
+import { ScoreBreakdownRow } from "@/components/games/score-breakdown";
+import { getTodayPuzzle, submitGuess, type TodayResponse, type ScoreBreakdown } from "@/app/actions/puzzles";
 
 const CATEGORY_LABELS: Record<string, string> = {
   format: "format",
@@ -35,6 +36,7 @@ type Attempt = {
   status: "started" | "won" | "lost";
   score: number;
   guessesCount: number;
+  breakdown?: ScoreBreakdown;
 };
 
 type Field = {
@@ -149,6 +151,7 @@ export const WordleBoard = (props: WordleBoardProps) => {
           revealed={revealed}
           guesses={guesses}
           categories={categories}
+          breakdown={attempt?.breakdown}
         />
       )}
 
@@ -250,6 +253,7 @@ type ResultPanelProps = {
   revealed: string | null;
   guesses: PriorGuess[];
   categories: string[];
+  breakdown?: ScoreBreakdown;
 };
 
 const ResultPanel = (props: ResultPanelProps) => {
@@ -289,6 +293,7 @@ const ResultPanel = (props: ResultPanelProps) => {
         <Badge appearance="soft">{props.score}</Badge>
         <Button className="ms-auto" onClick={copy}>copy share</Button>
       </div>
+      {props.breakdown && props.status === "won" ? <ScoreBreakdownRow breakdown={props.breakdown} /> : null}
     </div>
   );
 };

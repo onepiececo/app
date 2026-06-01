@@ -40,6 +40,8 @@ type Attempt struct {
 	DurationMS   *int       `json:"durationMs,omitempty"`
 	CreatedAt    time.Time  `json:"createdAt"`
 	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+	// Breakdown is populated for finished attempts so the UI can render the score math.
+	Breakdown *ScoreBreakdown `json:"breakdown,omitempty"`
 }
 
 func (s *Store) UpsertPuzzle(ctx context.Context, gameID string, date *time.Time, seed, difficulty string, draft PuzzleDraft) (*Puzzle, error) {

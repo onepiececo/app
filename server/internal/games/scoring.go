@@ -26,6 +26,26 @@ func lookupAnswerPopularity(ctx context.Context, pool *pgxpool.Pool, puzzleID in
 	return pop, err
 }
 
+// BuildBreakdown computes the score breakdown for a completed attempt by reading the answer popularity
+// and walking the guesses to count how many were used. Works for any engine that uses StandardScore.
+func BuildBreakdown(ctx context.Context, pool *pgxpool.Pool, state AttemptState) (ScoreBreakdown, error) {
+	used := 0
+	for _, g := range state.Guesses {
+		used++
+		if g.Correct {
+			break
+		}
+	}
+	pop, _ := lookupAnswerPopularity(ctx, pool, state.PuzzleID)
+	_, bd := StandardScore(ScoreInput{
+		GuessesUsed:      used,
+		DurationMS:       state.EndedAt - state.StartedAt,
+		AnswerPopularity: pop,
+		Won:              state.Status == "won",
+	})
+	return bd, nil
+}
+
 type PopularityTier string
 
 const (
