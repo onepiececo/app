@@ -72,6 +72,8 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // No day scroller mounted on this route — let the page own arrow keys.
+      if (!scrollerRef.current) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;

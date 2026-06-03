@@ -59,32 +59,35 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="sticky top-0 z-10 flex flex-col gap-3 border-border border-b bg-background/95 px-6 py-4 backdrop-blur sm:flex-row sm:items-center sm:gap-4">
-        <InputGroup className="flex-1">
-          <InputGroupAddon align="inline-start">
-            {loading ? <Loader2 className="animate-spin" /> : <Search />}
-          </InputGroupAddon>
-          <Input
-            unstyled
-            type="search"
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search anime by title or alias"
-            aria-label="Search anime"
-          />
-        </InputGroup>
-        <Select value={sort} onValueChange={(v) => setSort(v as AnimeSort)}>
-          <SelectTrigger size="default" className="w-full sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            {SORT_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
+      <header className="sticky top-0 z-10 flex flex-col gap-4 border-border border-b bg-sidebar px-6 py-5">
+        <h1 className="font-semibold text-foreground text-lg tracking-tight">Anime Database</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+          <InputGroup className="flex-1">
+            <InputGroupAddon align="inline-start">
+              {loading ? <Loader2 className="animate-spin" /> : <Search />}
+            </InputGroupAddon>
+            <Input
+              unstyled
+              type="search"
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Search anime by title or alias"
+              aria-label="Search anime"
+            />
+          </InputGroup>
+          <Select value={sort} onValueChange={(v) => setSort(v as AnimeSort)}>
+            <SelectTrigger size="default" className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {SORT_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
       </header>
       {results.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-6 py-16 text-muted-foreground text-sm">
