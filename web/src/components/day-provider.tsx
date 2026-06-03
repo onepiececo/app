@@ -1,15 +1,16 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode, type RefCallback } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAvailableDays } from "@/app/actions/days";
 import { useDayScroll } from "@/hooks/use-day-scroll";
-import { makeDay, type Day } from "@/lib/days";
+import { makeDay, safeParseIso, TODAY_ISO, type Day } from "@/lib/days";
 
 type DayContextValue = {
   days: Day[];
   activeDay: Day;
   activeIdx: number;
+  scrolling: boolean;
   scrollToDay: (idx: number) => void;
   pickDay: (iso: string) => void;
   registerScroller: RefCallback<HTMLElement>;
@@ -31,20 +32,23 @@ export const useDay = () => {
 
 export type DayProviderProps = {
   days: Day[];
-  initialIso: string;
   children: ReactNode;
 };
 
 const PAGE_SIZE = 30;
-// How close to the bottom of the loaded window we trigger the next page.
 const PREFETCH_THRESHOLD = 3;
 
 export const DayProvider = (props: DayProviderProps) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const dateParam = sp.get("date");
+  const initialIso = safeParseIso(dateParam, props.days[0]?.iso ?? TODAY_ISO);
+
   const [days, setDays] = useState<Day[]>(props.days);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(false);
-  const initialIdx = Math.max(0, days.findIndex((d) => d.iso === props.initialIso));
+  const initialIdx = Math.max(0, days.findIndex((d) => d.iso === initialIso));
   const scroll = useDayScroll({ count: days.length, initialIdx });
 
   const loadMore = async () => {
@@ -75,7 +79,9 @@ export const DayProvider = (props: DayProviderProps) => {
   }, [scroll.activeIdx, days.length, exhausted, loadingMore]);
 
   const pickDay = (iso: string) => {
-    router.replace(`/?date=${iso}`, { scroll: false });
+    const params = new URLSearchParams(sp.toString());
+    params.set("date", iso);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     const idx = days.findIndex((d) => d.iso === iso);
     if (idx >= 0) scroll.scrollToDay(idx);
   };
@@ -89,6 +95,7 @@ export const DayProvider = (props: DayProviderProps) => {
     days,
     activeDay: days[scroll.activeIdx],
     activeIdx: scroll.activeIdx,
+    scrolling: scroll.scrolling,
     scrollToDay: scroll.scrollToDay,
     pickDay,
     registerScroller: scroll.registerScroller,

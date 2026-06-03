@@ -9,42 +9,71 @@ export type UseDayScrollOptions = {
 
 export type UseDayScrollResult = {
   activeIdx: number;
+  scrolling: boolean;
   scrollToDay: (idx: number) => void;
   registerScroller: RefCallback<HTMLElement>;
   registerSection: (idx: number) => RefCallback<HTMLElement>;
 };
 
 // Manages day-based scroll navigation with snap-style wheel/keyboard controls,
-// scroll-driven index tracking, and smooth programmatic jumps.
+// scroll-driven index tracking, smooth programmatic jumps, and a `scrolling`
+// flag that consumers can use to blur the date while the user is in motion.
 export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   const [activeIdx, setActiveIdx] = useState(opts.initialIdx ?? 0);
-  const scrollerRef = useRef<HTMLElement | null>(null);
+  const [scrolling, setScrolling] = useState(false);
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const activeIdxRef = useRef(activeIdx);
   activeIdxRef.current = activeIdx;
   const ignoreScrollUntil = useRef(0);
+  const scrollIdleTimer = useRef<number | null>(null);
+  const settleTimer = useRef<number | null>(null);
   const count = opts.count;
-  // Keep a live ref so handlers registered once still see the latest count
-  // when the day list grows from infinite-scroll loadMore.
   const countRef = useRef(count);
   countRef.current = count;
 
+  // Mark scrolling=true on every scroll tick, then debounce it back to false
+  // ~150ms after the user stops. Cleared by both real scroll and programmatic
+  // scrollIntoView, which fires scroll events too.
+  const flagScrolling = () => {
+    setScrolling(true);
+    if (scrollIdleTimer.current !== null) {
+      window.clearTimeout(scrollIdleTimer.current);
+    }
+    scrollIdleTimer.current = window.setTimeout(() => {
+      setScrolling(false);
+      scrollIdleTimer.current = null;
+    }, 150);
+  };
+
   useEffect(() => {
-    const root = scrollerRef.current;
-    if (!root) return;
-    // Direct scroll listener instead of IntersectionObserver — IO only fires
-    // at threshold crossings and can miss slow scrollbar drags. scrollTop /
-    // clientHeight gives a continuous read on every scroll event.
+    if (!scroller) return;
+    // Update activeIdx only after the scroll settles. Without this, every
+    // intermediate scroll tick changes the value and interrupts the date's
+    // slot-roll springs mid-flight, leaving half-rendered glyphs. Delay
+    // matches the scroll-idle window so the date snaps and animates exactly
+    // once when the user pauses.
     const onScroll = () => {
+      flagScrolling();
       if (Date.now() < ignoreScrollUntil.current) return;
-      const h = root.clientHeight;
-      if (h <= 0) return;
-      const idx = Math.min(count - 1, Math.max(0, Math.round(root.scrollTop / h)));
-      if (idx !== activeIdxRef.current) setActiveIdx(idx);
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      settleTimer.current = window.setTimeout(() => {
+        settleTimer.current = null;
+        const h = scroller.clientHeight;
+        if (h <= 0) return;
+        const idx = Math.min(count - 1, Math.max(0, Math.round(scroller.scrollTop / h)));
+        if (idx !== activeIdxRef.current) setActiveIdx(idx);
+      }, 130);
     };
-    root.addEventListener("scroll", onScroll, { passive: true });
-    return () => root.removeEventListener("scroll", onScroll);
-  }, [count]);
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      if (settleTimer.current !== null) {
+        window.clearTimeout(settleTimer.current);
+        settleTimer.current = null;
+      }
+    };
+  }, [scroller, count]);
 
   const scrollToDay = (idx: number) => {
     const clamped = Math.max(0, Math.min(countRef.current - 1, idx));
@@ -55,8 +84,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   };
 
   useEffect(() => {
-    const root = scrollerRef.current;
-    if (!root) return;
+    if (!scroller) return;
     let lastFire = 0;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) < 4) return;
@@ -64,16 +92,16 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
       const now = Date.now();
       if (now - lastFire < 500) return;
       lastFire = now;
+      flagScrolling();
       scrollToDay(activeIdxRef.current + (e.deltaY > 0 ? 1 : -1));
     };
-    root.addEventListener("wheel", onWheel, { passive: false });
-    return () => root.removeEventListener("wheel", onWheel);
-  }, []);
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroller.removeEventListener("wheel", onWheel);
+  }, [scroller]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // No day scroller mounted on this route — let the page own arrow keys.
-      if (!scrollerRef.current) return;
+      if (!scroller) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
@@ -103,15 +131,11 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [count]);
-
-  const registerScroller: RefCallback<HTMLElement> = (el) => {
-    scrollerRef.current = el;
-  };
+  }, [scroller, count]);
 
   const registerSection = (idx: number): RefCallback<HTMLElement> => (el) => {
     sectionRefs.current[idx] = el;
   };
 
-  return { activeIdx, scrollToDay, registerScroller, registerSection };
+  return { activeIdx, scrolling, scrollToDay, registerScroller: setScroller, registerSection };
 };
