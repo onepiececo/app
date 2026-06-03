@@ -28,8 +28,8 @@ export const NavLinks = (props: NavLinksProps) => {
             key={item.href}
             href={item.href}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-foreground/80 text-sm outline-none transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/50",
-              variant === "drawer" && "py-3 text-base",
+              "-mx-3 flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-foreground/80 text-sm outline-none transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/50",
+              variant === "drawer" && "mx-0 py-3 text-base",
             )}
           >
             <Icon className="size-4 opacity-80" />
