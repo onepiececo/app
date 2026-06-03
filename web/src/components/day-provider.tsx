@@ -10,7 +10,7 @@ type DayContextValue = {
   days: Day[];
   activeDay: Day;
   activeIdx: number;
-  jumpTo: (idx: number) => void;
+  scrollToDay: (idx: number) => void;
   pickDay: (iso: string) => void;
   registerScroller: RefCallback<HTMLElement>;
   registerSection: (idx: number) => RefCallback<HTMLElement>;
@@ -77,7 +77,7 @@ export const DayProvider = (props: DayProviderProps) => {
   const pickDay = (iso: string) => {
     router.replace(`/?date=${iso}`, { scroll: false });
     const idx = days.findIndex((d) => d.iso === iso);
-    if (idx >= 0) scroll.jumpTo(idx);
+    if (idx >= 0) scroll.scrollToDay(idx);
   };
 
   const lastDate = days[0].date;
@@ -89,7 +89,7 @@ export const DayProvider = (props: DayProviderProps) => {
     days,
     activeDay: days[scroll.activeIdx],
     activeIdx: scroll.activeIdx,
-    jumpTo: scroll.jumpTo,
+    scrollToDay: scroll.scrollToDay,
     pickDay,
     registerScroller: scroll.registerScroller,
     registerSection: scroll.registerSection,

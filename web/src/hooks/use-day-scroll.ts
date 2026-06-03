@@ -9,23 +9,20 @@ export type UseDayScrollOptions = {
 
 export type UseDayScrollResult = {
   activeIdx: number;
-  jumpTo: (idx: number) => void;
+  scrollToDay: (idx: number) => void;
   registerScroller: RefCallback<HTMLElement>;
   registerSection: (idx: number) => RefCallback<HTMLElement>;
 };
 
-// Encapsulates the multi-day scroll-snap behavior. Owns the active index,
-// a wheel hijack (one tick equals one day), keyboard nav (arrow keys, home,
-// end), and an IntersectionObserver that drives the index from touch scroll.
-// Programmatic jumps suppress the observer for the duration of the smooth
-// scroll so the index doesn't cascade through intermediate sections.
+// Manages day-based scroll navigation with snap-style wheel/keyboard controls,
+// scroll-driven index tracking, and smooth programmatic jumps.
 export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   const [activeIdx, setActiveIdx] = useState(opts.initialIdx ?? 0);
   const scrollerRef = useRef<HTMLElement | null>(null);
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const activeIdxRef = useRef(activeIdx);
   activeIdxRef.current = activeIdx;
-  const suppressUntil = useRef(0);
+  const ignoreScrollUntil = useRef(0);
   const count = opts.count;
   // Keep a live ref so handlers registered once still see the latest count
   // when the day list grows from infinite-scroll loadMore.
@@ -39,7 +36,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     // at threshold crossings and can miss slow scrollbar drags. scrollTop /
     // clientHeight gives a continuous read on every scroll event.
     const onScroll = () => {
-      if (Date.now() < suppressUntil.current) return;
+      if (Date.now() < ignoreScrollUntil.current) return;
       const h = root.clientHeight;
       if (h <= 0) return;
       const idx = Math.min(count - 1, Math.max(0, Math.round(root.scrollTop / h)));
@@ -49,10 +46,10 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     return () => root.removeEventListener("scroll", onScroll);
   }, [count]);
 
-  const jumpTo = (idx: number) => {
+  const scrollToDay = (idx: number) => {
     const clamped = Math.max(0, Math.min(countRef.current - 1, idx));
     if (clamped === activeIdxRef.current) return;
-    suppressUntil.current = Date.now() + 900;
+    ignoreScrollUntil.current = Date.now() + 900;
     setActiveIdx(clamped);
     sectionRefs.current[clamped]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -67,7 +64,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
       const now = Date.now();
       if (now - lastFire < 500) return;
       lastFire = now;
-      jumpTo(activeIdxRef.current + (e.deltaY > 0 ? 1 : -1));
+      scrollToDay(activeIdxRef.current + (e.deltaY > 0 ? 1 : -1));
     };
     root.addEventListener("wheel", onWheel, { passive: false });
     return () => root.removeEventListener("wheel", onWheel);
@@ -84,21 +81,21 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
         case "PageDown":
         case "j":
           e.preventDefault();
-          jumpTo(activeIdxRef.current + 1);
+          scrollToDay(activeIdxRef.current + 1);
           break;
         case "ArrowUp":
         case "PageUp":
         case "k":
           e.preventDefault();
-          jumpTo(activeIdxRef.current - 1);
+          scrollToDay(activeIdxRef.current - 1);
           break;
         case "Home":
           e.preventDefault();
-          jumpTo(0);
+          scrollToDay(0);
           break;
         case "End":
           e.preventDefault();
-          jumpTo(count - 1);
+          scrollToDay(count - 1);
           break;
       }
     };
@@ -114,5 +111,5 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     sectionRefs.current[idx] = el;
   };
 
-  return { activeIdx, jumpTo, registerScroller, registerSection };
+  return { activeIdx, scrollToDay, registerScroller, registerSection };
 };
