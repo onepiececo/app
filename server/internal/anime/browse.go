@@ -5,6 +5,18 @@ import (
 	"fmt"
 )
 
+// Count returns the total number of catalog anime under the same visibility
+// filter Browse uses, so the two reads always agree on what counts.
+func (s *Store) Count(ctx context.Context) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*)
+		FROM anime
+		WHERE is_adult = false AND title_primary IS NOT NULL
+	`).Scan(&n)
+	return n, err
+}
+
 // Browse returns anime sorted by the requested column, paginated.
 // Sort is whitelisted server-side so the value is safe to interpolate.
 func (s *Store) Browse(ctx context.Context, sort string, limit, offset int) ([]Hit, error) {

@@ -31,6 +31,15 @@ func (h *AnimeHandler) Search(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, hits)
 }
 
+func (h *AnimeHandler) Count(w http.ResponseWriter, r *http.Request) {
+	n, err := h.store.Count(r.Context())
+	if err != nil {
+		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "count_failed", Message: err.Error()})
+		return
+	}
+	apiutil.WriteJSON(w, http.StatusOK, map[string]int{"count": n})
+}
+
 func (h *AnimeHandler) Browse(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
@@ -45,6 +54,25 @@ func (h *AnimeHandler) Browse(w http.ResponseWriter, r *http.Request) {
 		hits = []anime.Hit{}
 	}
 	apiutil.WriteJSON(w, http.StatusOK, hits)
+}
+
+func (h *AnimeHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusBadRequest, Code: "bad_id", Message: "id must be numeric"})
+		return
+	}
+	a, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "get_failed", Message: err.Error()})
+		return
+	}
+	if a == nil {
+		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusNotFound, Code: "not_found", Message: "anime not found"})
+		return
+	}
+	apiutil.WriteJSON(w, http.StatusOK, a)
 }
 
 func (h *AnimeHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
