@@ -63,7 +63,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
         if (h <= 0) return;
         const idx = Math.min(count - 1, Math.max(0, Math.round(scroller.scrollTop / h)));
         if (idx !== activeIdxRef.current) setActiveIdx(idx);
-      }, 130);
+      }, 60);
     };
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => {
