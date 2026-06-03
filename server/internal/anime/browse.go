@@ -29,7 +29,7 @@ func (s *Store) Browse(ctx context.Context, sort string, limit, offset int) ([]H
 	q := fmt.Sprintf(`
 		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0)
 		FROM anime
-		WHERE is_game_eligible = true AND is_adult = false AND title_primary IS NOT NULL
+		WHERE is_adult = false AND title_primary IS NOT NULL
 		ORDER BY %s
 		LIMIT $1 OFFSET $2
 	`, orderBy)

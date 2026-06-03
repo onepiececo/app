@@ -89,9 +89,9 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
           </Select>
         </div>
       </header>
-      {results.length === 0 ? (
+      {results.length === 0 && query.trim().length > 0 ? (
         <div className="flex flex-1 items-center justify-center px-6 py-16 text-muted-foreground text-sm">
-          {query.trim().length > 0 ? "No anime match that search." : "No anime in the catalog yet."}
+          No anime match that search.
         </div>
       ) : (
         <ul className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -100,17 +100,16 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
               <Link
                 href={`/anime/${a.slug}`}
                 prefetch={false}
-                className="group flex aspect-[5/3] w-full flex-col justify-end gap-2 bg-muted/40 p-5 outline-none transition-colors duration-150 ease-out hover:bg-muted/60 focus-visible:bg-muted/60"
+                className="group flex aspect-[5/3] w-full flex-col justify-end gap-1 bg-muted/40 p-5 outline-none transition-colors duration-150 ease-out hover:bg-muted/60 focus-visible:bg-muted/60"
               >
-                <div className="flex items-baseline justify-between gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-                  {a.year ? <span className="tabular-nums">{a.year}</span> : <span />}
-                  {a.score && a.score > 0 ? (
-                    <span className="tabular-nums">{Math.round(a.score)}</span>
-                  ) : null}
-                </div>
                 <span className="line-clamp-3 font-semibold text-base text-foreground leading-snug">
                   {a.title}
                 </span>
+                {a.year ? (
+                  <span className="font-medium text-muted-foreground text-xs tabular-nums">
+                    {a.year}
+                  </span>
+                ) : null}
               </Link>
             </li>
           ))}
