@@ -33,6 +33,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	animeH := handlers.NewAnimeHandler(animeStore)
 	playerH := handlers.NewPlayerHandler(playerStore, cfg.JWKS)
 	puzzleH := handlers.NewPuzzleHandler(cfg.Pool, gamesStore, animeStore, playerStore, cfg.JWKS, cfg.Engines)
+	catalogH := handlers.NewCatalogHandler(cfg.Pool)
 
 	jwksAuth := auth.JWKSAuth(cfg.JWKS)
 	authed := func(pattern string, fn http.HandlerFunc) {
@@ -43,6 +44,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	mux.HandleFunc("GET /v1/anime", animeH.Search)
 	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
+
+	mux.HandleFunc("GET /v1/games", catalogH.Games)
+	mux.HandleFunc("GET /v1/days", catalogH.Days)
 
 	mux.HandleFunc("GET /v1/players/me", playerH.Me)
 
