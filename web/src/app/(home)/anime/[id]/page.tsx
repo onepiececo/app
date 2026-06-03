@@ -11,7 +11,11 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-export async function generateMetadata(props: PageProps<"/anime/[id]">) {
+type AnimeDetailProps = {
+  params: Promise<{ id: string }>;
+};
+
+export async function generateMetadata(props: AnimeDetailProps) {
   const { id } = await props.params;
   const anime = await getAnimeById(Number(id));
   return {
@@ -44,7 +48,7 @@ const altTitles = (anime: AnimeDetail) => {
   return out;
 };
 
-export default async function AnimeDetailPage(props: PageProps<"/anime/[id]">) {
+export default async function AnimeDetailPage(props: AnimeDetailProps) {
   const { id } = await props.params;
   const numId = Number(id);
   if (!Number.isFinite(numId)) notFound();
