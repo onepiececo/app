@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AnimateDigits, AnimateText } from "@/components/animate-number";
 import { useDay } from "@/components/day-provider";
+import { NavLinks } from "@/components/nav-links";
 import { SidebarChrome } from "@/components/sidebar-chrome";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
@@ -63,6 +64,7 @@ export const Sidebar = () => {
           />
         </PopoverPopup>
       </Popover>
+      <NavLinks variant="rail" />
       <div className="mt-auto pt-6">
         <SidebarChrome />
       </div>

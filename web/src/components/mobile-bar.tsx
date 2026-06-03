@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 import { useDay } from "@/components/day-provider";
+import { NavLinks } from "@/components/nav-links";
 import { SidebarChrome } from "@/components/sidebar-chrome";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -18,11 +19,12 @@ import { SELECTED_DAY_CLASS, toIso } from "@/lib/days";
 
 export const MobileBar = () => {
   const day = useDay();
-  const [open, setOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-border border-b bg-sidebar px-3 lg:hidden">
-      <Popup open={open} onOpenChange={setOpen}>
+      <Popup open={dateOpen} onOpenChange={setDateOpen}>
         <PopupTrigger
           render={
             <Button variant="ghost" className="-ms-2 gap-2">
@@ -49,13 +51,30 @@ export const MobileBar = () => {
               onSelect={(picked) => {
                 if (!picked) return;
                 day.pickDay(toIso(picked));
-                setOpen(false);
+                setDateOpen(false);
               }}
             />
           </PopupBody>
         </PopupContent>
       </Popup>
-      <div className="ms-auto">
+      <div className="ms-auto flex items-center gap-2">
+        <Popup open={menuOpen} onOpenChange={setMenuOpen}>
+          <PopupTrigger
+            render={
+              <Button variant="ghost" size="icon-lg" aria-label="Open menu">
+                <Menu />
+              </Button>
+            }
+          />
+          <PopupContent>
+            <PopupHeader>
+              <PopupTitle>Navigate</PopupTitle>
+            </PopupHeader>
+            <PopupBody className="pb-6">
+              <NavLinks variant="drawer" />
+            </PopupBody>
+          </PopupContent>
+        </Popup>
         <SidebarChrome />
       </div>
     </header>
