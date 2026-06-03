@@ -31,6 +31,22 @@ func (h *AnimeHandler) Search(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, hits)
 }
 
+func (h *AnimeHandler) Browse(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	sort := r.URL.Query().Get("sort")
+
+	hits, err := h.store.Browse(r.Context(), sort, limit, offset)
+	if err != nil {
+		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "browse_failed", Message: err.Error()})
+		return
+	}
+	if hits == nil {
+		hits = []anime.Hit{}
+	}
+	apiutil.WriteJSON(w, http.StatusOK, hits)
+}
+
 func (h *AnimeHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if slug == "" {

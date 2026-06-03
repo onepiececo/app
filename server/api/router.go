@@ -43,6 +43,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /healthz", handlers.Health)
 
 	mux.HandleFunc("GET /v1/anime", animeH.Search)
+	mux.HandleFunc("GET /v1/anime/browse", animeH.Browse)
 	mux.HandleFunc("GET /v1/anime/{slug}", animeH.GetBySlug)
 
 	mux.HandleFunc("GET /v1/games", catalogH.Games)
