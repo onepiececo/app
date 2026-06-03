@@ -39,7 +39,9 @@ export async function getDailyGames(_iso: string): Promise<DailyGame[]> {
   }));
 }
 
-export async function getAvailableDays(limit = 30): Promise<string[]> {
-  const res = await serverJSON<ServerDays>(`/v1/days?limit=${limit}`).catch(() => null);
+export async function getAvailableDays(limit = 30, before?: string): Promise<string[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (before) params.set("before", before);
+  const res = await serverJSON<ServerDays>(`/v1/days?${params.toString()}`).catch(() => null);
   return res?.dates ?? [];
 }

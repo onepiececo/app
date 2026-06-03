@@ -27,6 +27,10 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   activeIdxRef.current = activeIdx;
   const suppressUntil = useRef(0);
   const count = opts.count;
+  // Keep a live ref so handlers registered once still see the latest count
+  // when the day list grows from infinite-scroll loadMore.
+  const countRef = useRef(count);
+  countRef.current = count;
 
   useEffect(() => {
     const root = scrollerRef.current;
@@ -46,7 +50,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   }, [count]);
 
   const jumpTo = (idx: number) => {
-    const clamped = Math.max(0, Math.min(count - 1, idx));
+    const clamped = Math.max(0, Math.min(countRef.current - 1, idx));
     if (clamped === activeIdxRef.current) return;
     suppressUntil.current = Date.now() + 900;
     setActiveIdx(clamped);

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
@@ -51,9 +53,12 @@ func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 	apiutil.WriteJSON(w, http.StatusOK, games)
 }
 
+var isoDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
 // Days returns the distinct puzzle_date values, newest first, capped at the
-// requested limit (default 30, max 365). Drives the date-rail and calendar
-// bounds on the web side.
+// requested limit (default 30, max 365). `before` lets the client keyset
+// paginate older windows by passing the oldest iso it currently knows.
+// Drives the date-rail and calendar bounds on the web side.
 func (h *CatalogHandler) Days(w http.ResponseWriter, r *http.Request) {
 	limit := 30
 	if v := r.URL.Query().Get("limit"); v != "" {
@@ -65,14 +70,30 @@ func (h *CatalogHandler) Days(w http.ResponseWriter, r *http.Request) {
 	if limit > 365 {
 		limit = 365
 	}
+	before := r.URL.Query().Get("before")
+	if before != "" && !isoDateRe.MatchString(before) {
+		before = ""
+	}
 
-	rows, err := h.pool.Query(r.Context(), `
-		SELECT DISTINCT puzzle_date
-		FROM puzzle
-		WHERE puzzle_date IS NOT NULL
-		ORDER BY puzzle_date DESC
-		LIMIT $1
-	`, limit)
+	var rows pgx.Rows
+	var err error
+	if before != "" {
+		rows, err = h.pool.Query(r.Context(), `
+			SELECT DISTINCT puzzle_date
+			FROM puzzle
+			WHERE puzzle_date IS NOT NULL AND puzzle_date < $2::date
+			ORDER BY puzzle_date DESC
+			LIMIT $1
+		`, limit, before)
+	} else {
+		rows, err = h.pool.Query(r.Context(), `
+			SELECT DISTINCT puzzle_date
+			FROM puzzle
+			WHERE puzzle_date IS NOT NULL
+			ORDER BY puzzle_date DESC
+			LIMIT $1
+		`, limit)
+	}
 	if err != nil {
 		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "days_failed", Message: err.Error()})
 		return
