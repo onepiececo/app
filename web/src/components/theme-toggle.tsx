@@ -6,17 +6,17 @@ import { useMounted } from "@/hooks/use-mounted";
 import { useTheme } from "@/components/theme-provider";
 
 type ThemeToggleProps = {
-  size?: "default" | "sm" | "lg" | "icon";
+  variant?: "default" | "secondary" | "outline" | "ghost";
 };
 
 export const ThemeToggle = (props: ThemeToggleProps) => {
   const mounted = useMounted();
   const { theme, setTheme } = useTheme();
-  const size = props.size ?? "icon";
+  const variant = props.variant ?? "outline";
 
   if (!mounted) {
     return (
-      <Button variant="outline" size={size} disabled aria-label="Toggle theme">
+      <Button variant={variant} size="icon-lg" disabled aria-label="Toggle theme">
         <Sun />
       </Button>
     );
@@ -24,8 +24,8 @@ export const ThemeToggle = (props: ThemeToggleProps) => {
 
   return (
     <Button
-      variant="outline"
-      size={size}
+      variant={variant}
+      size="icon-lg"
       aria-label="Toggle theme"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
     >
