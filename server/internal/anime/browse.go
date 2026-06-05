@@ -3,18 +3,28 @@ package anime
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
-// Count returns the total number of catalog anime under the same visibility
-// filter Browse uses, so the two reads always agree on what counts.
+// Count returns the catalog total under the same visibility filter Browse uses, cached briefly since it only shifts on ingest.
 func (s *Store) Count(ctx context.Context) (int, error) {
+	s.countMu.Lock()
+	defer s.countMu.Unlock()
+	if time.Now().Before(s.countExp) {
+		return s.countVal, nil
+	}
 	var n int
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*)
 		FROM anime
 		WHERE is_adult = false AND title_primary IS NOT NULL
 	`).Scan(&n)
-	return n, err
+	if err != nil {
+		return 0, err
+	}
+	s.countVal = n
+	s.countExp = time.Now().Add(countTTL)
+	return n, nil
 }
 
 // Browse returns anime sorted by the requested column, paginated.

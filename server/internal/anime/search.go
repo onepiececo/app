@@ -89,7 +89,7 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 	}
 	defer rows.Close()
 
-	var hits []Hit
+	hits := make([]Hit, 0, limit)
 	for rows.Next() {
 		var h Hit
 		var rank float32
