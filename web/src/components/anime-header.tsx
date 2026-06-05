@@ -70,13 +70,15 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
   const loading = debouncing || isPending;
 
   return (
-    <header className="sticky top-0 z-10 flex flex-col gap-4 border-border border-b bg-sidebar px-6 py-5">
-      <h1 className="font-semibold text-foreground text-lg tracking-tight">
-        Anime Database{" "}
-        <span className="font-normal text-muted-foreground tabular-nums">
-          ({props.total.toLocaleString()})
-        </span>
-      </h1>
+    <header className="sticky top-0 z-10 flex flex-col gap-5 border-border border-b bg-sidebar px-6 py-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-semibold text-2xl text-foreground tracking-tight">
+          Anime Database
+        </h1>
+        <p className="text-muted-foreground text-sm tabular-nums">
+          {props.total.toLocaleString()} titles
+        </p>
+      </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
         <InputGroup className="!bg-background flex-1 dark:!bg-[color-mix(in_srgb,var(--foreground)_2%,var(--background))]">
           <InputGroupAddon align="inline-start">
