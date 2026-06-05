@@ -9,7 +9,6 @@ export type AnimeGridProps = {
   query: string;
 };
 
-// Highlight the first case-insensitive occurrence of `query` inside the title.
 const highlight = (title: string, query: string): ReactNode => {
   const q = query.trim();
   if (q.length === 0) return title;
@@ -26,16 +25,6 @@ const highlight = (title: string, query: string): ReactNode => {
   );
 };
 
-const isLastCol = (i: number, total: number, cols: number) =>
-  (i + 1) % cols === 0 || i === total - 1;
-
-// Last-row detection that handles partial last rows. For N items in C columns,
-// items per last row = N % C (or C when evenly divisible).
-const isLastRow = (i: number, total: number, cols: number) => {
-  const inLast = total % cols === 0 ? cols : total % cols;
-  return i >= total - inLast;
-};
-
 export const AnimeGrid = (props: AnimeGridProps) => {
   if (props.anime.length === 0 && props.query.length > 0) {
     return (
@@ -44,26 +33,17 @@ export const AnimeGrid = (props: AnimeGridProps) => {
       </div>
     );
   }
-  const total = props.anime.length;
   return (
     <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       {props.anime.map((a, i) => (
         <li
           key={a.id}
           className={cn(
-            "[&>a]:border-border",
-            // Mobile (1 col) — bottom border on every tile except the last.
-            i < total - 1 && "[&>a]:border-b",
-            // sm (2 cols) — right border except last column, bottom except last row.
-            !isLastCol(i, total, 2) && "sm:[&>a]:border-r",
-            isLastCol(i, total, 2) && "sm:[&>a]:border-r-0",
-            !isLastRow(i, total, 2) && "sm:[&>a]:border-b",
-            isLastRow(i, total, 2) && "sm:[&>a]:border-b-0",
-            // lg (3 cols) — same rule, re-evaluated for 3-col layout.
-            !isLastCol(i, total, 3) && "lg:[&>a]:border-r",
-            isLastCol(i, total, 3) && "lg:[&>a]:border-r-0",
-            !isLastRow(i, total, 3) && "lg:[&>a]:border-b",
-            isLastRow(i, total, 3) && "lg:[&>a]:border-b-0",
+            "[&>a]:border-border [&>a]:border-b",
+            "sm:[&>a]:border-r",
+            i % 2 === 1 && "sm:[&>a]:border-r-0",
+            "lg:[&>a]:border-r",
+            i % 3 === 2 && "lg:[&>a]:border-r-0",
           )}
         >
           <Link
