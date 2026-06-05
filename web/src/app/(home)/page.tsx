@@ -24,7 +24,7 @@ export default async function HomePage(props: PageProps<"/">) {
               i === games.length - 1 && "md:col-span-2 lg:col-span-1",
             )}
           >
-            <GameTile name={g.name} tone={g.tone} available={g.available}>
+            <GameTile name={g.name} className={g.className} available={g.available}>
               {g.tagline}
             </GameTile>
           </li>
