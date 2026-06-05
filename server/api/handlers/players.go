@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 	"github.com/kgrahammatzen/onepiece-server/internal/player"
 )
 
@@ -24,23 +24,23 @@ func (h *PlayerHandler) Me(w http.ResponseWriter, r *http.Request) {
 	if bearer := r.Header.Get("Authorization"); bearer != "" {
 		userID, err := auth.VerifyBearer(h.jwks, bearer)
 		if err != nil && !errors.Is(err, auth.ErrMissingToken) {
-			apiutil.WriteError(w, apiutil.APIError{Status: http.StatusUnauthorized, Code: "invalid_token", Message: "invalid bearer"})
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusUnauthorized, Code: "invalid_token", Message: "invalid bearer"})
 			return
 		}
 		if userID != "" {
 			id, err := h.store.ResolveUser(r.Context(), userID)
 			if err != nil {
-				apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
+				httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
 				return
 			}
-			apiutil.WriteJSON(w, http.StatusOK, id)
+			httpx.WriteJSON(w, http.StatusOK, id)
 			return
 		}
 	}
 
 	anonKey := r.Header.Get("X-Anonymous-Key")
 	if anonKey == "" {
-		apiutil.WriteError(w, apiutil.APIError{
+		httpx.WriteError(w, httpx.APIError{
 			Status:  http.StatusUnauthorized,
 			Code:    "missing_identity",
 			Message: "send Authorization Bearer or X-Anonymous-Key",
@@ -49,8 +49,8 @@ func (h *PlayerHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := h.store.ResolveAnonymous(r.Context(), player.HashAnonymousKey(anonKey))
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
 		return
 	}
-	apiutil.WriteJSON(w, http.StatusOK, id)
+	httpx.WriteJSON(w, http.StatusOK, id)
 }

@@ -8,9 +8,9 @@ import (
 
 	"github.com/kgrahammatzen/onepiece-server/api/handlers"
 	"github.com/kgrahammatzen/onepiece-server/internal/anime"
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/games"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 	"github.com/kgrahammatzen/onepiece-server/internal/middleware"
 	"github.com/kgrahammatzen/onepiece-server/internal/player"
 )
@@ -63,13 +63,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	return middleware.RequestID(
 		middleware.Logging(cfg.Logger)(
-			middleware.CORS(cfg.WebURL)(mux),
+			middleware.CORS(cfg.WebURL)(
+				middleware.Gzip(mux),
+			),
 		),
 	)
 }
 
 func notFound(w http.ResponseWriter, r *http.Request) {
-	apiutil.WriteError(w, apiutil.APIError{Status: http.StatusNotFound, Code: "not_found", Message: "route not found"})
+	httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "not_found", Message: "route not found"})
 }
 
 // wrap applies the middleware chain in reverse so callers can list outermost to innermost.

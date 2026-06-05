@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kgrahammatzen/onepiece-server/internal/anime"
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/games"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 	"github.com/kgrahammatzen/onepiece-server/internal/player"
 )
 
@@ -52,7 +52,7 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 	}
 	engine, ok := h.engines[gameID]
 	if !ok {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusNotFound, Code: "unknown_game", Message: "game not registered"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "unknown_game", Message: "game not registered"})
 		return
 	}
 
@@ -61,7 +61,7 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 
 	puzzle, _, err := games.EnsurePuzzleForDate(ctx, h.pool, engine, today)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "load_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "load_failed", Message: err.Error()})
 		return
 	}
 	// Never leak the answer key to clients.
@@ -74,9 +74,9 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 		attempt, err := h.games.GetAttempt(ctx, puzzle.ID, identity.ID)
 		if err == nil && attempt != nil {
 			resp.Attempt = attempt
-			resp.Guesses = h.loadGuesses(ctx, attempt.ID)
+			state, priors := h.loadAttemptGuesses(ctx, puzzle.ID, attempt.ID, attempt.Status)
+			resp.Guesses = priors
 			if attempt.Status != "started" {
-				state := h.attemptState(ctx, puzzle.ID, attempt.ID, attempt.Status)
 				state.StartedAt = attempt.CreatedAt.UnixMilli()
 				if attempt.CompletedAt != nil {
 					state.EndedAt = attempt.CompletedAt.UnixMilli()
@@ -88,7 +88,7 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 type guessRequest struct {
@@ -101,41 +101,41 @@ type guessRequest struct {
 func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 	puzzleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusBadRequest, Code: "bad_puzzle_id", Message: "puzzle id must be numeric"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_puzzle_id", Message: "puzzle id must be numeric"})
 		return
 	}
 
 	var body guessRequest
-	if err := apiutil.DecodeJSON(r, &body); err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: err.Error()})
+	if err := httpx.DecodeJSON(r, &body); err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: err.Error()})
 		return
 	}
 
 	ctx := r.Context()
 	puzzle, err := h.games.GetByID(ctx, puzzleID)
 	if err != nil || puzzle == nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusNotFound, Code: "puzzle_not_found", Message: "puzzle not found"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "puzzle_not_found", Message: "puzzle not found"})
 		return
 	}
 	engine, ok := h.engines[puzzle.GameID]
 	if !ok {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "no_engine", Message: "no engine for game"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "no_engine", Message: "no engine for game"})
 		return
 	}
 
 	identity, err := h.resolveIdentity(r)
 	if err != nil || identity == nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusUnauthorized, Code: "missing_identity", Message: "send Authorization Bearer or X-Anonymous-Key"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusUnauthorized, Code: "missing_identity", Message: "send Authorization Bearer or X-Anonymous-Key"})
 		return
 	}
 
 	attempt, err := h.games.StartOrGetAttempt(ctx, puzzle.ID, identity.ID)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "attempt_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "attempt_failed", Message: err.Error()})
 		return
 	}
 	if attempt.Status != "started" {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusConflict, Code: "attempt_done", Message: "attempt already complete"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusConflict, Code: "attempt_done", Message: "attempt already complete"})
 		return
 	}
 
@@ -152,11 +152,11 @@ func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 
 	result, err := engine.ValidateGuess(ctx, input)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "validate_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "validate_failed", Message: err.Error()})
 		return
 	}
 	if err := h.games.RecordGuess(ctx, attempt.ID, input, result); err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "record_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "record_failed", Message: err.Error()})
 		return
 	}
 
@@ -170,36 +170,36 @@ func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 		_ = h.games.CompleteAttempt(ctx, attempt.ID, result.Status, score, duration)
 	}
 
-	apiutil.WriteJSON(w, http.StatusOK, result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // Complete forcibly closes the attempt as lost. Useful for a give up button.
 func (h *PuzzleHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	puzzleID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusBadRequest, Code: "bad_puzzle_id", Message: "puzzle id must be numeric"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_puzzle_id", Message: "puzzle id must be numeric"})
 		return
 	}
 	identity, err := h.resolveIdentity(r)
 	if err != nil || identity == nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusUnauthorized, Code: "missing_identity", Message: "send Authorization Bearer or X-Anonymous-Key"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusUnauthorized, Code: "missing_identity", Message: "send Authorization Bearer or X-Anonymous-Key"})
 		return
 	}
 	attempt, err := h.games.GetAttempt(r.Context(), puzzleID, identity.ID)
 	if err != nil || attempt == nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusNotFound, Code: "no_attempt", Message: "no attempt to complete"})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "no_attempt", Message: "no attempt to complete"})
 		return
 	}
 	if attempt.Status != "started" {
-		apiutil.WriteJSON(w, http.StatusOK, attempt)
+		httpx.WriteJSON(w, http.StatusOK, attempt)
 		return
 	}
 	duration := int(time.Since(attempt.CreatedAt).Milliseconds())
 	if err := h.games.CompleteAttempt(r.Context(), attempt.ID, "lost", 0, duration); err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "complete_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "complete_failed", Message: err.Error()})
 		return
 	}
-	apiutil.WriteJSON(w, http.StatusOK, map[string]string{"status": "lost"})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "lost"})
 }
 
 func (h *PuzzleHandler) resolveIdentity(r *http.Request) (*player.Identity, error) {
@@ -222,42 +222,29 @@ func (h *PuzzleHandler) resolveIdentity(r *http.Request) (*player.Identity, erro
 	return nil, nil
 }
 
-func (h *PuzzleHandler) loadGuesses(ctx context.Context, attemptID int64) []priorGuess {
-	rows, err := h.pool.Query(ctx, `
-		SELECT position, raw_guess, result
-		FROM puzzle_guess
-		WHERE attempt_id = $1
-		ORDER BY position ASC
-	`, attemptID)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var out []priorGuess
-	for rows.Next() {
-		var g priorGuess
-		if err := rows.Scan(&g.Position, &g.RawGuess, &g.Result); err == nil {
-			out = append(out, g)
-		}
-	}
-	return out
-}
-
-func (h *PuzzleHandler) attemptState(ctx context.Context, puzzleID, attemptID int64, status string) games.AttemptState {
+// loadAttemptGuesses reads an attempt's guesses once and returns both the engine state and the client projection.
+func (h *PuzzleHandler) loadAttemptGuesses(ctx context.Context, puzzleID, attemptID int64, status string) (games.AttemptState, []priorGuess) {
 	state := games.AttemptState{PuzzleID: puzzleID, AttemptID: attemptID, Status: status}
 	rows, err := h.pool.Query(ctx, `
 		SELECT position, raw_guess, (result->>'correct')::bool, result
 		FROM puzzle_guess WHERE attempt_id = $1 ORDER BY position ASC
 	`, attemptID)
 	if err != nil {
-		return state
+		return state, nil
 	}
 	defer rows.Close()
+	var priors []priorGuess
 	for rows.Next() {
 		var g games.GuessRecord
 		if err := rows.Scan(&g.Position, &g.RawGuess, &g.Correct, &g.Detail); err == nil {
 			state.Guesses = append(state.Guesses, g)
+			priors = append(priors, priorGuess{Position: g.Position, RawGuess: g.RawGuess, Result: g.Detail})
 		}
 	}
+	return state, priors
+}
+
+func (h *PuzzleHandler) attemptState(ctx context.Context, puzzleID, attemptID int64, status string) games.AttemptState {
+	state, _ := h.loadAttemptGuesses(ctx, puzzleID, attemptID, status)
 	return state
 }

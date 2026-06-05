@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 )
 
 const requestIDHeader = "X-Request-ID"
@@ -38,7 +38,7 @@ func RequestID(next http.Handler) http.Handler {
 			id = uuid.New().String()
 		}
 		w.Header().Set(requestIDHeader, id)
-		ctx := apiutil.WithRequestID(r.Context(), id)
+		ctx := httpx.WithRequestID(r.Context(), id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -47,7 +47,7 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			reqID := apiutil.RequestIDFromContext(r.Context())
+			reqID := httpx.RequestIDFromContext(r.Context())
 			child := logger.With("request_id", reqID)
 
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}

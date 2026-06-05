@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 )
 
 // JWKSAuth verifies a Bearer JWT issued by Better Auth using JWKS.
@@ -15,7 +15,7 @@ func JWKSAuth(jwks *JWKSStore) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			scheme, tokenString, ok := strings.Cut(strings.TrimSpace(r.Header.Get("Authorization")), " ")
 			if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tokenString) == "" {
-				apiutil.WriteError(w, apiutil.APIError{
+				httpx.WriteError(w, httpx.APIError{
 					Status:  http.StatusUnauthorized,
 					Code:    "missing_token",
 					Message: "Authorization Bearer token is required",
@@ -29,7 +29,7 @@ func JWKSAuth(jwks *JWKSStore) func(http.Handler) http.Handler {
 				return jwks.Keyfunc(t, t.Claims)
 			})
 			if err != nil || !token.Valid {
-				apiutil.WriteError(w, apiutil.APIError{
+				httpx.WriteError(w, httpx.APIError{
 					Status:  http.StatusUnauthorized,
 					Code:    "invalid_token",
 					Message: "invalid or expired token",
@@ -39,7 +39,7 @@ func JWKSAuth(jwks *JWKSStore) func(http.Handler) http.Handler {
 
 			claims, ok := token.Claims.(jwt.MapClaims)
 			if !ok {
-				apiutil.WriteError(w, apiutil.APIError{
+				httpx.WriteError(w, httpx.APIError{
 					Status:  http.StatusUnauthorized,
 					Code:    "invalid_token",
 					Message: "invalid token claims",
@@ -49,7 +49,7 @@ func JWKSAuth(jwks *JWKSStore) func(http.Handler) http.Handler {
 
 			ctx := r.Context()
 			if sub, _ := claims["sub"].(string); sub != "" {
-				ctx = apiutil.WithUserID(ctx, sub)
+				ctx = httpx.WithUserID(ctx, sub)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))

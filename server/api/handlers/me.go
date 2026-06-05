@@ -3,18 +3,18 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 )
 
 func Me(w http.ResponseWriter, r *http.Request) {
-	userID := apiutil.UserIDFromContext(r.Context())
+	userID := httpx.UserIDFromContext(r.Context())
 	if userID == "" {
-		apiutil.WriteError(w, apiutil.APIError{
+		httpx.WriteError(w, httpx.APIError{
 			Status:  http.StatusUnauthorized,
 			Code:    "missing_user",
 			Message: "no user in context",
 		})
 		return
 	}
-	apiutil.WriteJSON(w, http.StatusOK, map[string]string{"userId": userID})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"userId": userID})
 }

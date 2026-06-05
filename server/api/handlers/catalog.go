@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 )
 
 type CatalogHandler struct {
@@ -36,7 +36,7 @@ func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 		ORDER BY id
 	`)
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "games_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "games_failed", Message: err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -45,12 +45,12 @@ func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g gameRow
 		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.IsActive); err != nil {
-			apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "games_scan", Message: err.Error()})
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "games_scan", Message: err.Error()})
 			return
 		}
 		games = append(games, g)
 	}
-	apiutil.WriteJSON(w, http.StatusOK, games)
+	httpx.WriteJSON(w, http.StatusOK, games)
 }
 
 var isoDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
@@ -95,7 +95,7 @@ func (h *CatalogHandler) Days(w http.ResponseWriter, r *http.Request) {
 		`, limit)
 	}
 	if err != nil {
-		apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "days_failed", Message: err.Error()})
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "days_failed", Message: err.Error()})
 		return
 	}
 	defer rows.Close()
@@ -104,10 +104,10 @@ func (h *CatalogHandler) Days(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d time.Time
 		if err := rows.Scan(&d); err != nil {
-			apiutil.WriteError(w, apiutil.APIError{Status: http.StatusInternalServerError, Code: "days_scan", Message: err.Error()})
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "days_scan", Message: err.Error()})
 			return
 		}
 		dates = append(dates, d.Format("2006-01-02"))
 	}
-	apiutil.WriteJSON(w, http.StatusOK, map[string]any{"dates": dates})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"dates": dates})
 }

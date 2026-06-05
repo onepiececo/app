@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/kgrahammatzen/onepiece-server/internal/apiutil"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
 )
 
 func Health(w http.ResponseWriter, r *http.Request) {
-	apiutil.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
