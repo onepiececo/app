@@ -49,16 +49,7 @@ export const SELECTED_DAY_CLASS = [
   "in-[[data-selected]:not(.range-middle)]:!text-primary-foreground",
 ].join(" ");
 
-export const TODAY_ISO = "2026-06-03";
-export const TODAY = makeDay(TODAY_ISO);
-
-// Seven-day window the snap rail walks through, newest first.
-export const DAYS: Day[] = [
-  makeDay("2026-06-03"),
-  makeDay("2026-06-02"),
-  makeDay("2026-06-01"),
-  makeDay("2026-05-31"),
-  makeDay("2026-05-30"),
-  makeDay("2026-05-29"),
-  makeDay("2026-05-28"),
-];
+// Local-date ISO. On the client this is the user's wall-clock date, which is
+// what the day rail should pin to. On the server this is the host timezone,
+// only used as a last-resort fallback when the server returns no days.
+export const todayIso = () => toIso(new Date());

@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode, type RefCallback } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { getAvailableDays } from "@/app/actions/days";
 import { useDayScroll } from "@/hooks/use-day-scroll";
-import { makeDay, safeParseIso, TODAY_ISO, type Day } from "@/lib/days";
+import { makeDay, safeParseIso, todayIso, type Day } from "@/lib/days";
 
 type DayContextValue = {
   days: Day[];
@@ -38,18 +38,39 @@ export type DayProviderProps = {
 const PAGE_SIZE = 30;
 const PREFETCH_THRESHOLD = 3;
 
+// Update ?date= in the URL bar without triggering a Next.js navigation. Using
+// router.replace would re-run the server component and refetch RSC for every
+// scroll settle; history.replaceState keeps the URL in sync as a pure client
+// effect, which is what we actually want.
+const writeDateParam = (iso: string) => {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("date") === iso) return;
+  url.searchParams.set("date", iso);
+  window.history.replaceState(window.history.state, "", url.toString());
+};
+
 export const DayProvider = (props: DayProviderProps) => {
-  const router = useRouter();
-  const pathname = usePathname();
   const sp = useSearchParams();
   const dateParam = sp.get("date");
-  const initialIso = safeParseIso(dateParam, props.days[0]?.iso ?? TODAY_ISO);
+  const localToday = todayIso();
+  const hasLocalToday = props.days.some((d) => d.iso === localToday);
+  const fallbackIso = hasLocalToday ? localToday : (props.days[0]?.iso ?? localToday);
+  const initialIso = safeParseIso(dateParam, fallbackIso);
 
   const [days, setDays] = useState<Day[]>(props.days);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   const initialIdx = Math.max(0, days.findIndex((d) => d.iso === initialIso));
   const scroll = useDayScroll({ count: days.length, initialIdx });
+
+  // Sync the URL to whichever day the scroll has settled on. Skip while the
+  // user is actively scrolling so we don't churn the URL mid-flight.
+  useEffect(() => {
+    if (scroll.scrolling) return;
+    const activeIso = days[scroll.activeIdx]?.iso;
+    if (!activeIso) return;
+    writeDateParam(activeIso);
+  }, [scroll.scrolling, scroll.activeIdx, days]);
 
   const loadMore = async () => {
     if (loadingMore || exhausted) return;
@@ -79,9 +100,7 @@ export const DayProvider = (props: DayProviderProps) => {
   }, [scroll.activeIdx, days.length, exhausted, loadingMore]);
 
   const pickDay = (iso: string) => {
-    const params = new URLSearchParams(sp.toString());
-    params.set("date", iso);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    writeDateParam(iso);
     const idx = days.findIndex((d) => d.iso === iso);
     if (idx >= 0) scroll.scrollToDay(idx);
   };

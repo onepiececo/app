@@ -1,7 +1,7 @@
 import { getDailyGames } from "@/app/actions/days";
 import { DayScroller } from "@/components/day-scroller";
 import { GameTile } from "@/components/game-tile";
-import { safeParseIso, TODAY_ISO } from "@/lib/days";
+import { safeParseIso, todayIso } from "@/lib/days";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function HomePage(props: PageProps<"/">) {
   const sp = await props.searchParams;
-  const initialIso = safeParseIso(sp.date, TODAY_ISO);
+  const initialIso = safeParseIso(sp.date, todayIso());
   const games = await getDailyGames(initialIso);
 
   return (
