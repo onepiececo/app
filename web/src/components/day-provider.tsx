@@ -38,10 +38,7 @@ export type DayProviderProps = {
 const PAGE_SIZE = 30;
 const PREFETCH_THRESHOLD = 3;
 
-// Update ?date= in the URL bar without triggering a Next.js navigation. Using
-// router.replace would re-run the server component and refetch RSC for every
-// scroll settle; history.replaceState keeps the URL in sync as a pure client
-// effect, which is what we actually want.
+// router.replace would refetch RSC on every scroll settle, history.replaceState updates the URL without navigation.
 const writeDateParam = (iso: string) => {
   const url = new URL(window.location.href);
   if (url.searchParams.get("date") === iso) return;
@@ -63,8 +60,6 @@ export const DayProvider = (props: DayProviderProps) => {
   const initialIdx = Math.max(0, days.findIndex((d) => d.iso === initialIso));
   const scroll = useDayScroll({ count: days.length, initialIdx });
 
-  // Sync the URL to whichever day the scroll has settled on. Skip while the
-  // user is actively scrolling so we don't churn the URL mid-flight.
   useEffect(() => {
     if (scroll.scrolling) return;
     const activeIso = days[scroll.activeIdx]?.iso;

@@ -19,30 +19,35 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const sortRef = useRef(props.sort);
 
-  // Re-seed when the sort URL param changes. The page re-renders with a fresh
-  // initialAnime slice for the new sort, so reset state to match.
+  // Reads from inside the observer callback so it stays mounted across fetches.
+  const stateRef = useRef({ loading, exhausted });
+  stateRef.current = { loading, exhausted };
+
+  // Tags each fetch so a stale resolution from a prior sort bails out.
+  const tokenRef = useRef(0);
+
   useEffect(() => {
-    if (sortRef.current === props.sort) {
-      setItems(props.initialAnime);
-      setExhausted(props.initialAnime.length >= props.total);
-      return;
-    }
+    if (sortRef.current === props.sort) return;
     sortRef.current = props.sort;
+    tokenRef.current++;
     setItems(props.initialAnime);
     setExhausted(props.initialAnime.length >= props.total);
+    setLoading(false);
   }, [props.sort, props.initialAnime, props.total]);
 
   useEffect(() => {
-    if (exhausted) return;
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (loading || exhausted) return;
+        const live = stateRef.current;
+        if (live.loading || live.exhausted) return;
+        const token = ++tokenRef.current;
         setLoading(true);
         browseAnime(props.sort, props.pageSize, items.length)
           .then((next) => {
+            if (token !== tokenRef.current) return;
             if (next.length === 0) {
               setExhausted(true);
               return;
@@ -54,13 +59,15 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
               return merged;
             });
           })
-          .finally(() => setLoading(false));
+          .finally(() => {
+            if (token === tokenRef.current) setLoading(false);
+          });
       },
       { rootMargin: "400px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [items.length, loading, exhausted, props.sort, props.pageSize, props.total]);
+  }, [items.length, props.sort, props.pageSize, props.total]);
 
   return (
     <>

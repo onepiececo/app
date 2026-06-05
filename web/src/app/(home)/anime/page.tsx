@@ -7,8 +7,6 @@ export const metadata = {
   title: "Anime Database — onepiece",
 };
 
-export const dynamic = "force-dynamic";
-
 const VALID_SORTS = new Set<AnimeSort>(["title", "popularity", "year", "score"]);
 const PAGE_SIZE = 30;
 
