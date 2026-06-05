@@ -13,7 +13,7 @@ const transformers: ShikiTransformer[] = [
   {
     pre(node) {
       node.properties.class =
-        `${node.properties.class ?? ""} !bg-transparent`.trim();
+        `${node.properties.class ?? ""} bg-transparent!`.trim();
       node.properties["data-line-numbers"] = "";
     },
     line(node) {

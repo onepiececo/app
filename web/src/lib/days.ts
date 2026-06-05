@@ -42,14 +42,11 @@ export const safeParseIso = (input: unknown, fallback: string): string => {
 // text in dark mode; clear the gradient and force a primary fill so the cell
 // inverts per theme.
 export const SELECTED_DAY_CLASS = [
-  "in-[[data-selected]:not(.range-middle)]:!bg-none",
-  "in-[[data-selected]:not(.range-middle)]:!shadow-none",
-  "in-[[data-selected]:not(.range-middle)]:!inset-shadow-none",
-  "in-[[data-selected]:not(.range-middle)]:!bg-primary",
-  "in-[[data-selected]:not(.range-middle)]:!text-primary-foreground",
+  "in-[[data-selected]:not(.range-middle)]:bg-none!",
+  "in-[[data-selected]:not(.range-middle)]:shadow-none!",
+  "in-[[data-selected]:not(.range-middle)]:inset-shadow-none!",
+  "in-[[data-selected]:not(.range-middle)]:bg-primary!",
+  "in-[[data-selected]:not(.range-middle)]:text-primary-foreground!",
 ].join(" ");
 
-// Local-date ISO. On the client this is the user's wall-clock date, which is
-// what the day rail should pin to. On the server this is the host timezone,
-// only used as a last-resort fallback when the server returns no days.
 export const todayIso = () => toIso(new Date());

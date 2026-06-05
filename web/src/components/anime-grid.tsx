@@ -49,7 +49,7 @@ export const AnimeGrid = (props: AnimeGridProps) => {
           <Link
             href={`/anime/${a.id}`}
             prefetch={false}
-            className="group relative flex aspect-[5/3] w-full flex-col justify-end gap-1 bg-muted/40 p-5 outline-none transition-colors duration-150 ease-out hover:bg-muted/60 focus-visible:bg-muted/60"
+            className="group relative flex aspect-5/3 w-full flex-col justify-end gap-1 bg-muted/40 p-5 outline-none transition-colors duration-150 ease-out hover:bg-muted/60 focus-visible:bg-muted/60"
           >
             <ImageIcon
               aria-hidden

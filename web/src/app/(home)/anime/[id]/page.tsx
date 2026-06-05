@@ -77,7 +77,7 @@ export default async function AnimeDetailPage(props: AnimeDetailProps) {
         </Breadcrumb>
 
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-          <div className="relative flex aspect-[2/3] w-32 shrink-0 items-center justify-center rounded-lg bg-muted/40 sm:w-40">
+          <div className="relative flex aspect-2/3 w-32 shrink-0 items-center justify-center rounded-lg bg-muted/40 sm:w-40">
             <ImageIcon aria-hidden className="size-10 text-foreground/15" />
           </div>
           <div className="flex flex-col gap-2">

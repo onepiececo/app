@@ -206,7 +206,7 @@ export function DataTable<TData>(props: DataTableProps<TData>) {
                             "after:block after:h-4 after:w-0.5 after:rounded-full after:bg-foreground/25 after:transition-colors",
                             "hover:after:bg-foreground/55",
                             header.column.getIsResizing() &&
-                              "after:!bg-primary after:!h-6 after:!w-1",
+                              "after:bg-primary! after:h-6! after:w-1!",
                           )}
                         />
                       )}
