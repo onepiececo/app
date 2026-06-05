@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Loader2, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type { AnimeSort } from "@/app/actions/anime";
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const SORT_OPTIONS: { value: AnimeSort; label: string }[] = [
   { value: "title", label: "A to Z" },
@@ -31,11 +32,9 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
   const pathname = usePathname();
   const [value, setValue] = useState(props.currentQuery);
   const [sort, setSort] = useState<AnimeSort>(props.currentSort);
-  const [debouncing, setDebouncing] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const isFirstRun = useRef(true);
+  const debouncedValue = useDebouncedValue(value, 300);
 
-  // Sync local state when external navigation moves the URL.
   useEffect(() => {
     setValue(props.currentQuery);
   }, [props.currentQuery]);
@@ -43,31 +42,19 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
     setSort(props.currentSort);
   }, [props.currentSort]);
 
-  // Debounce keystrokes, then push the new query/sort into the URL. The
-  // server page receives the updated searchParams and re-fetches; the
-  // useTransition wraps that navigation so isPending stays true through
-  // the server roundtrip.
   useEffect(() => {
-    if (isFirstRun.current) {
-      isFirstRun.current = false;
-      return;
-    }
-    setDebouncing(true);
-    const handle = setTimeout(() => {
-      setDebouncing(false);
-      const params = new URLSearchParams();
-      const trimmed = value.trim();
-      if (trimmed) params.set("q", trimmed);
-      if (sort !== "title") params.set("sort", sort);
-      const qs = params.toString();
-      startTransition(() => {
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-      });
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [value, sort, pathname, router]);
+    const trimmed = debouncedValue.trim();
+    if (trimmed === props.currentQuery && sort === props.currentSort) return;
+    const params = new URLSearchParams();
+    if (trimmed) params.set("q", trimmed);
+    if (sort !== "title") params.set("sort", sort);
+    const qs = params.toString();
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    });
+  }, [debouncedValue, sort, props.currentQuery, props.currentSort, pathname, router]);
 
-  const loading = debouncing || isPending;
+  const loading = value !== debouncedValue || isPending;
 
   return (
     <header className="sticky top-0 z-10 flex flex-col gap-5 border-border border-b bg-sidebar px-6 py-6">
@@ -80,7 +67,7 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-        <InputGroup className="!bg-background flex-1 dark:!bg-[color-mix(in_srgb,var(--foreground)_2%,var(--background))]">
+        <InputGroup className="bg-background! flex-1 dark:bg-[color-mix(in_srgb,var(--foreground)_2%,var(--background))]!">
           <InputGroupAddon align="inline-start">
             {loading ? <Loader2 className="animate-spin" /> : <Search />}
           </InputGroupAddon>
