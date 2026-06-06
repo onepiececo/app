@@ -59,7 +59,7 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 
-	puzzle, _, err := games.EnsurePuzzleForDate(ctx, h.pool, engine, today)
+	puzzle, _, err := games.EnsurePuzzleForDate(ctx, h.games, engine, today)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "load_failed", Message: err.Error()})
 		return

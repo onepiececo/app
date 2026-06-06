@@ -51,13 +51,14 @@ func runPuzzleBackfill(ctx context.Context, pool *pgxpool.Pool, logger *slog.Log
 	now := time.Now().UTC()
 	oldest := now.AddDate(0, 0, -backfillDays)
 	latest := now.AddDate(0, 0, 1)
+	store := NewStore(pool)
 	for _, e := range engines {
 		generated := 0
 		for d := oldest; !d.After(latest); d = d.AddDate(0, 0, 1) {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			_, created, err := EnsurePuzzleForDate(ctx, pool, e, d)
+			_, created, err := EnsurePuzzleForDate(ctx, store, e, d)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return err
