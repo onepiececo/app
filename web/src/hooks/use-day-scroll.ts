@@ -19,15 +19,18 @@ export type UseDayScrollResult = {
 // scroll-driven index tracking, smooth programmatic jumps, and a `scrolling`
 // flag that consumers can use to blur the date while the user is in motion.
 export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
-  const [activeIdx, setActiveIdx] = useState(opts.initialIdx ?? 0);
+  const initialIdx = opts.initialIdx ?? 0;
+  const [activeIdx, setActiveIdx] = useState(initialIdx);
   const [scrolling, setScrolling] = useState(false);
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const activeIdxRef = useRef(activeIdx);
   activeIdxRef.current = activeIdx;
   const ignoreScrollUntil = useRef(0);
+  const didInitScroll = useRef(false);
   const scrollIdleTimer = useRef<number | null>(null);
   const settleTimer = useRef<number | null>(null);
+  const draggingRef = useRef(false);
   const count = opts.count;
   const countRef = useRef(count);
   countRef.current = count;
@@ -48,32 +51,72 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
 
   useEffect(() => {
     if (!scroller) return;
-    // Update activeIdx only after the scroll settles. Without this, every
-    // intermediate scroll tick changes the value and interrupts the date's
-    // slot-roll springs mid-flight, leaving half-rendered glyphs. Delay
-    // matches the scroll-idle window so the date snaps and animates exactly
-    // once when the user pauses.
+    const computeIdx = () => {
+      const h = scroller.clientHeight;
+      if (h <= 0) return null;
+      return Math.min(count - 1, Math.max(0, Math.round(scroller.scrollTop / h)));
+    };
+    // Wheel and keyboard updates settle after 60ms so the AnimateDigits spring runs once when the user stops, scrollbar and touch drag bypass the settle so the date flips per day boundary as the user crosses it.
     const onScroll = () => {
       flagScrolling();
       if (Date.now() < ignoreScrollUntil.current) return;
+      if (draggingRef.current) {
+        const idx = computeIdx();
+        if (idx !== null && idx !== activeIdxRef.current) setActiveIdx(idx);
+        return;
+      }
       if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
       settleTimer.current = window.setTimeout(() => {
         settleTimer.current = null;
-        const h = scroller.clientHeight;
-        if (h <= 0) return;
-        const idx = Math.min(count - 1, Math.max(0, Math.round(scroller.scrollTop / h)));
-        if (idx !== activeIdxRef.current) setActiveIdx(idx);
+        const idx = computeIdx();
+        if (idx !== null && idx !== activeIdxRef.current) setActiveIdx(idx);
       }, 60);
     };
+    const onPointerDown = () => {
+      draggingRef.current = true;
+    };
+    const onPointerEnd = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      const idx = computeIdx();
+      if (idx !== null && idx !== activeIdxRef.current) setActiveIdx(idx);
+    };
     scroller.addEventListener("scroll", onScroll, { passive: true });
+    scroller.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
     return () => {
       scroller.removeEventListener("scroll", onScroll);
+      scroller.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
       if (settleTimer.current !== null) {
         window.clearTimeout(settleTimer.current);
         settleTimer.current = null;
       }
     };
   }, [scroller, count]);
+
+  // Restore scroll on every scroller mount, including remounts after navigating
+  // away and back to a route that hosts the scroller. The hook lives in
+  // DayProvider on the (home) layout so activeIdxRef survives across route
+  // changes, the consumer (DayScroller) does not.
+  useEffect(() => {
+    if (!scroller) {
+      didInitScroll.current = false;
+      return;
+    }
+    const target = activeIdxRef.current > 0 ? activeIdxRef.current : initialIdx;
+    if (target <= 0) {
+      didInitScroll.current = true;
+      return;
+    }
+    const h = scroller.clientHeight;
+    if (h <= 0) return;
+    didInitScroll.current = true;
+    ignoreScrollUntil.current = Date.now() + 900;
+    scroller.scrollTop = target * h;
+  }, [scroller, initialIdx]);
 
   const scrollToDay = (idx: number) => {
     const clamped = Math.max(0, Math.min(countRef.current - 1, idx));

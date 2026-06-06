@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode, type Re
 import { useSearchParams } from "next/navigation";
 import { getAvailableDays } from "@/app/actions/days";
 import { useDayScroll } from "@/hooks/use-day-scroll";
-import { makeDay, safeParseIso, todayIso, type Day } from "@/lib/days";
+import { makeDay, safeParseIso, type Day } from "@/lib/days";
 
 type DayContextValue = {
   days: Day[];
@@ -49,9 +49,8 @@ const writeDateParam = (iso: string) => {
 export const DayProvider = (props: DayProviderProps) => {
   const sp = useSearchParams();
   const dateParam = sp.get("date");
-  const localToday = todayIso();
-  const hasLocalToday = props.days.some((d) => d.iso === localToday);
-  const fallbackIso = hasLocalToday ? localToday : (props.days[0]?.iso ?? localToday);
+  // The server date list is the single source of truth, newest first, so today is days[0].
+  const fallbackIso = props.days[0]?.iso ?? "";
   const initialIso = safeParseIso(dateParam, fallbackIso);
 
   const [days, setDays] = useState<Day[]>(props.days);
