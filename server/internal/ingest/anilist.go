@@ -39,6 +39,9 @@ const anilistMediaFields = `
   source
   season
   seasonYear
+  startDate {
+    year
+  }
   episodes
   duration
   averageScore
@@ -68,7 +71,7 @@ const anilistMediaFields = `
       node { id idMal }
     }
   }
-  characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+  characters(perPage: 20, sort: [ROLE, RELEVANCE]) {
     edges {
       role
       node {
@@ -95,7 +98,7 @@ query CatalogPage($page: Int!, $perPage: Int!) {
       currentPage
       hasNextPage
     }
-    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {` + anilistMediaFields + `}
+    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false, status_not: NOT_YET_RELEASED) {` + anilistMediaFields + `}
   }
 }
 `
@@ -133,12 +136,15 @@ type anilistMedia struct {
 		Native        *string `json:"native"`
 		UserPreferred *string `json:"userPreferred"`
 	} `json:"title"`
-	Synonyms     []string `json:"synonyms"`
-	Format       *string  `json:"format"`
-	Status       *string  `json:"status"`
-	Source       *string  `json:"source"`
-	Season       *string  `json:"season"`
-	SeasonYear   *int     `json:"seasonYear"`
+	Synonyms   []string `json:"synonyms"`
+	Format     *string  `json:"format"`
+	Status     *string  `json:"status"`
+	Source     *string  `json:"source"`
+	Season     *string  `json:"season"`
+	SeasonYear *int     `json:"seasonYear"`
+	StartDate  struct {
+		Year *int `json:"year"`
+	} `json:"startDate"`
 	Episodes     *int     `json:"episodes"`
 	Duration     *int     `json:"duration"`
 	AverageScore *int     `json:"averageScore"`
@@ -283,6 +289,12 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 
 	slug := anime.Slugify(title) + "-" + strconv.FormatInt(int64(m.ID), 36)
 
+	// AniList only sets seasonYear for seasonal TV, fall back to the start date year so movies and OVAs still carry a year.
+	seasonYear := m.SeasonYear
+	if seasonYear == nil {
+		seasonYear = m.StartDate.Year
+	}
+
 	u := &anime.AnimeUpsert{
 		Slug:            slug,
 		TitlePrimary:    title,
@@ -293,7 +305,7 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		Status:          m.Status,
 		Source:          m.Source,
 		Season:          m.Season,
-		SeasonYear:      m.SeasonYear,
+		SeasonYear:      seasonYear,
 		Episodes:        m.Episodes,
 		DurationMinutes: m.Duration,
 		AverageScore:    m.AverageScore,
@@ -301,8 +313,8 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		Popularity:      m.Popularity,
 		Favourites:      m.Favourites,
 		IsAdult:         m.IsAdult,
-		CoverSourceURL:  pickURL(m.CoverImage.ExtraLarge, m.CoverImage.Large),
-		BannerSourceURL: m.BannerImage,
+		CoverSourceURL:  dropAniListDefault(pickURL(m.CoverImage.ExtraLarge, m.CoverImage.Large)),
+		BannerSourceURL: dropAniListDefault(m.BannerImage),
 		CoverColor:      m.CoverImage.Color,
 	}
 
@@ -368,7 +380,7 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 			SourceID:   strconv.Itoa(edge.Node.ID),
 			NameFull:   name,
 			NameNative: edge.Node.Name.Native,
-			ImageURL:   edge.Node.Image.Large,
+			ImageURL:   dropAniListDefault(edge.Node.Image.Large),
 			Gender:     edge.Node.Gender,
 			Age:        edge.Node.Age,
 			Role:       role,
@@ -385,6 +397,14 @@ func pickTitle(opts ...*string) string {
 		}
 	}
 	return ""
+}
+
+// dropAniListDefault returns nil for AniList placeholder art so a missing image reads as such rather than carrying the default.
+func dropAniListDefault(u *string) *string {
+	if u != nil && strings.Contains(*u, "anilistcdn/") && strings.HasSuffix(*u, "/default.jpg") {
+		return nil
+	}
+	return u
 }
 
 func pickURL(opts ...*string) *string {
