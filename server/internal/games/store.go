@@ -23,7 +23,7 @@ type Puzzle struct {
 	ID          int64           `json:"id"`
 	GameID      string          `json:"gameId"`
 	PuzzleDate  *time.Time      `json:"puzzleDate,omitempty"`
-	Seed        string          `json:"seed"`
+	Seed        string          `json:"-"`
 	Difficulty  string          `json:"difficulty"`
 	Payload     json.RawMessage `json:"payload"`
 	AnswerKey   json.RawMessage `json:"-"`
@@ -163,20 +163,5 @@ func (s *Store) CompleteAttempt(ctx context.Context, attemptID int64, status str
 		SET status = $1, score = $2, duration_ms = $3, completed_at = now()
 		WHERE id = $4
 	`, status, score, durationMS, attemptID)
-	return err
-}
-
-func (s *Store) BumpAnswerStats(ctx context.Context, puzzleID int64, slot string, animeID int64, correct bool) error {
-	c := 0
-	if correct {
-		c = 1
-	}
-	_, err := s.pool.Exec(ctx, `
-		INSERT INTO puzzle_answer_stats (puzzle_id, answer_slot, anime_id, correct_count, total_count)
-		VALUES ($1, $2, $3, $4, 1)
-		ON CONFLICT (puzzle_id, answer_slot, anime_id) DO UPDATE SET
-			correct_count = puzzle_answer_stats.correct_count + EXCLUDED.correct_count,
-			total_count   = puzzle_answer_stats.total_count   + 1
-	`, puzzleID, slot, animeID, c)
 	return err
 }

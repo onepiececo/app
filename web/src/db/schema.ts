@@ -375,19 +375,3 @@ export const puzzleGuess = pgTable("puzzle_guess", {
   position: integer("position").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
-
-export const puzzleAnswerStats = pgTable(
-  "puzzle_answer_stats",
-  {
-    puzzleId: bigint("puzzle_id", { mode: "number" })
-      .notNull()
-      .references(() => puzzle.id, { onDelete: "cascade" }),
-    answerSlot: text("answer_slot").notNull(),
-    animeId: bigint("anime_id", { mode: "number" })
-      .notNull()
-      .references(() => anime.id),
-    correctCount: integer("correct_count").notNull().default(0),
-    totalCount: integer("total_count").notNull().default(0),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.puzzleId, t.answerSlot, t.animeId] }) }),
-);
