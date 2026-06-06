@@ -64,16 +64,16 @@ func (h *AnimeHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_id", Message: "id must be numeric"})
 		return
 	}
-	a, err := h.store.GetByID(r.Context(), id)
+	d, err := h.store.GetDetailByID(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "get_failed", Message: err.Error()})
 		return
 	}
-	if a == nil {
+	if d == nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "not_found", Message: "anime not found"})
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, a)
+	httpx.WriteJSON(w, http.StatusOK, d)
 }
 
 func (h *AnimeHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {

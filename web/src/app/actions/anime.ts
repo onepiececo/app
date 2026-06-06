@@ -8,6 +8,8 @@ export type AnimeHit = {
   title: string;
   year?: number;
   score?: number;
+  coverSourceUrl?: string;
+  coverColor?: string;
 };
 
 export type AnimeSort = "title" | "popularity" | "year" | "score";
@@ -38,6 +40,27 @@ export async function getAnimeCount(): Promise<number> {
   return res?.count ?? 0;
 }
 
+export type AnimeAlias = { alias: string; source: string };
+export type AnimeTag = { name: string; category?: string; rank?: number; isSpoiler: boolean };
+export type AnimeStudio = { name: string; isMain: boolean };
+export type AnimeRelation = {
+  relationType: string;
+  animeId?: number;
+  title?: string;
+  slug?: string;
+  coverSourceUrl?: string;
+  seasonYear?: number;
+  externalSource?: string;
+  externalId?: string;
+};
+export type AnimeCharacter = {
+  id: number;
+  name: string;
+  native?: string;
+  imageUrl?: string;
+  role: "MAIN" | "SUPPORTING" | "BACKGROUND";
+};
+
 export type AnimeDetail = {
   id: number;
   slug: string;
@@ -61,6 +84,12 @@ export type AnimeDetail = {
   coverSourceUrl?: string;
   bannerSourceUrl?: string;
   coverColor?: string;
+  aliases?: AnimeAlias[];
+  genres?: string[];
+  tags?: AnimeTag[];
+  studios?: AnimeStudio[];
+  relations?: AnimeRelation[];
+  characters?: AnimeCharacter[];
 };
 
 export async function getAnimeById(id: number): Promise<AnimeDetail | null> {
