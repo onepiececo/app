@@ -26,8 +26,11 @@ export default async function AnimePage(props: PageProps<"/anime">) {
   ]);
 
   return (
-    <>
-      <AnimeHeader currentQuery={q} currentSort={sort} currentFormat={format} total={total} />
+    <div className="flex flex-col">
+      {/* Sticky so the filters stay reachable as the grid scrolls under them, the negative margins let the opaque background span the full width. */}
+      <div className="-mx-6 -mt-3 sticky top-0 z-20 bg-background px-6 pt-3 pb-5 lg:-mx-8 lg:px-8 xl:-mx-12 xl:px-12">
+        <AnimeHeader currentQuery={q} currentSort={sort} currentFormat={format} total={total} />
+      </div>
       {q.length > 0 ? (
         <AnimeGrid anime={anime} query={q} />
       ) : (
@@ -39,6 +42,6 @@ export default async function AnimePage(props: PageProps<"/anime">) {
           pageSize={PAGE_SIZE}
         />
       )}
-    </>
+    </div>
   );
 }

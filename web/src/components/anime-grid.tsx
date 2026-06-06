@@ -41,37 +41,44 @@ const scoreBand = (n: number | undefined) => {
 // over both light and dark covers without needing a backdrop strip.
 const COVER_TEXT = "[text-shadow:_0_0_3px_rgb(0_0_0/0.95),_0_1px_3px_rgb(0_0_0/0.9),_0_2px_8px_rgb(0_0_0/0.5)]";
 
-const Tile = (props: { anime: AnimeHit; query: string }) => {
+// Eager-load the first two rows at the widest grid since they hold the above-the-fold LCP.
+const PRIORITY_COUNT = 10;
+
+const Tile = (props: { anime: AnimeHit; query: string; priority?: boolean }) => {
   const a = props.anime;
-  const s = typeof a.score === "number" ? (a.score / 10).toFixed(1) : null;
+  const s = typeof a.score === "number" && a.score > 0 ? (a.score / 10).toFixed(1) : null;
   return (
     <Link
       href={`/anime/${a.id}`}
       prefetch={false}
-      className="group -m-2 block cursor-pointer rounded-lg p-2 outline-none transition-colors hover:bg-accent/40 focus-visible:bg-accent/50"
+      aria-label={a.title}
+      className={cn(
+        "group relative block aspect-2/3 cursor-pointer overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white",
+        !a.coverColor && "bg-muted/40",
+      )}
+      style={a.coverColor ? { backgroundColor: a.coverColor } : undefined}
     >
-      <div
-        className={cn("relative aspect-2/3 overflow-hidden", !a.coverColor && "bg-muted/40")}
-        style={a.coverColor ? { backgroundColor: a.coverColor } : undefined}
-      >
-        {a.coverSourceUrl ? (
-          <Image
-            src={a.coverSourceUrl}
-            alt={a.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 25vw, 20vw"
-            className="origin-center object-cover transition-transform duration-500 ease-out will-change-transform group-hover:scale-110"
-          />
-        ) : (
-          <ImageIcon aria-hidden className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 size-7 text-foreground/15" />
-        )}
-        <span className={cn("absolute top-2 right-2 left-2 line-clamp-2 font-semibold text-white text-sm leading-tight", COVER_TEXT)}>
-          {highlight(a.title, props.query)}
-        </span>
-        <div className="absolute right-2 bottom-2 flex flex-col items-end gap-0.5 tabular-nums">
-          {s ? <span className={cn("font-bold text-xl leading-none", COVER_TEXT, scoreBand(a.score))}>{s}</span> : null}
-          {a.year ? <span className={cn("text-white text-xs", COVER_TEXT)}>{a.year}</span> : null}
-        </div>
+      {a.coverSourceUrl ? (
+        // The 2 percent overscan hides any sub-pixel cover-color bleed on the right or bottom edge.
+        <Image
+          src={a.coverSourceUrl}
+          alt={a.title}
+          fill
+          priority={props.priority}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 25vw, 20vw"
+          className="scale-[1.02] object-cover"
+        />
+      ) : (
+        <ImageIcon aria-hidden className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 size-7 text-foreground/15" />
+      )}
+      {/* Darken triggers on mouse hover and on keyboard focus so both inputs get the same feedback. */}
+      <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/35 group-focus-visible:bg-black/35" />
+      <span className={cn("absolute top-2 right-2 left-2 line-clamp-2 font-semibold text-white text-sm leading-tight", COVER_TEXT)}>
+        {highlight(a.title, props.query)}
+      </span>
+      <div className="absolute right-2 bottom-2 flex flex-col items-end gap-0.5 tabular-nums">
+        {s ? <span className={cn("font-bold text-xl leading-none", COVER_TEXT, scoreBand(a.score))}>{s}</span> : null}
+        {a.year ? <span className={cn("text-white text-xs", COVER_TEXT)}>{a.year}</span> : null}
       </div>
     </Link>
   );
@@ -83,7 +90,7 @@ export const AnimeGrid = (props: AnimeGridProps) => {
   }
   return (
     <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-      {props.anime.map((a) => <Tile key={a.id} anime={a} query={props.query} />)}
+      {props.anime.map((a, i) => <Tile key={a.id} anime={a} query={props.query} priority={i < PRIORITY_COUNT} />)}
     </div>
   );
 };
