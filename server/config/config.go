@@ -38,7 +38,8 @@ type Config struct {
 	AniListCron        string `env:"ANILIST_CRON" envDefault:"0 * * * *"`
 	AniListPages       int    `env:"ANILIST_PAGES" envDefault:"50"`
 	AniListRPM         int    `env:"ANILIST_RPM" envDefault:"25"`
-	AniListRelationIDs int    `env:"ANILIST_RELATION_IDS" envDefault:"100"`
+	// AniListRelationIDs caps how many missing related ids one pass resolves, zero drains the whole backlog in a single run.
+	AniListRelationIDs int    `env:"ANILIST_RELATION_IDS" envDefault:"0"`
 
 	// Jikan ingestion knobs.
 	JikanCron      string `env:"JIKAN_CRON" envDefault:"*/30 * * * *"`

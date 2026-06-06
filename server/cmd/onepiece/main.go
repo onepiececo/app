@@ -26,8 +26,7 @@ import (
 func main() {
 	startup := time.Now()
 
-	// .env.local overrides .env for local testing, both are optional.
-	_ = godotenv.Load(".env.local")
+	// .env is optional, real environments set the variables directly.
 	_ = godotenv.Load(".env")
 
 	cfg, err := config.Load()

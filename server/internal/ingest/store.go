@@ -133,9 +133,9 @@ type JikanCandidate struct {
 }
 
 // MissingRelationIDs returns AniList ids referenced by anime_relation that have no local anime yet,
-// so a backfill pass can fetch the related shows before crawling new ones.
+// so a backfill pass can fetch the related shows before crawling new ones. A limit of zero returns the whole backlog.
 func MissingRelationIDs(ctx context.Context, pool *pgxpool.Pool, limit int) ([]int, error) {
-	rows, err := pool.Query(ctx, `
+	q := `
 		SELECT DISTINCT ar.external_to_id
 		FROM anime_relation ar
 		WHERE ar.external_to_source = 'anilist'
@@ -143,8 +143,13 @@ func MissingRelationIDs(ctx context.Context, pool *pgxpool.Pool, limit int) ([]i
 		    SELECT 1 FROM source_id_map m
 		    WHERE m.source = 'anilist' AND m.source_id = ar.external_to_id
 		  )
-		LIMIT $1
-	`, limit)
+	`
+	var args []any
+	if limit > 0 {
+		q += " LIMIT $1"
+		args = append(args, limit)
+	}
+	rows, err := pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

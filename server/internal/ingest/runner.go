@@ -194,7 +194,7 @@ func isSerializationConflict(err error) bool {
 
 // AniListRelationOptions controls a relation backfill pass.
 type AniListRelationOptions struct {
-	// MaxIDs caps how many missing related ids to resolve in one pass so a single run stays bounded.
+	// MaxIDs caps how many missing related ids one run resolves, zero drains the whole backlog.
 	MaxIDs int
 	// RPMLimit is requests per minute, the same budget the catalog crawl uses.
 	RPMLimit int
@@ -205,13 +205,11 @@ func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *sl
 	anilistMu.Lock()
 	defer anilistMu.Unlock()
 
-	if opts.MaxIDs <= 0 {
-		opts.MaxIDs = 100
-	}
 	if opts.RPMLimit <= 0 {
 		opts.RPMLimit = 25
 	}
 
+	// MaxIDs of zero drains the whole backlog in one run so a single pass clears it rather than chipping off a fixed batch per cron tick.
 	ids, err := MissingRelationIDs(ctx, pool, opts.MaxIDs)
 	if err != nil {
 		return err
@@ -234,9 +232,10 @@ func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *sl
 	ticker := time.NewTicker(gap)
 	defer ticker.Stop()
 
-	logger.Info("anilist relations started", "missing", len(ids), "rpm", opts.RPMLimit)
+	logger.Info("anilist relations started", "backlog", len(ids), "rpm", opts.RPMLimit)
 
 	upserted := 0
+	processed := 0
 	for _, batch := range chunkInts(ids, 50) {
 		select {
 		case <-ctx.Done():
@@ -251,12 +250,13 @@ func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *sl
 			}
 			return err
 		}
+		processed += len(batch)
 		upserted += upsertMedia(ctx, pool, store, logger, media)
-		_ = run.Bump(ctx, pool, len(media), upserted, map[string]int{"remaining": len(ids)})
-		logger.Debug("anilist relations batch", "ids", len(batch), "found", len(media), "total_upserted", upserted)
+		_ = run.Bump(ctx, pool, len(media), upserted, map[string]int{"remaining": len(ids) - processed})
+		logger.Debug("anilist relations batch", "found", len(media), "processed", processed, "backlog", len(ids), "total_upserted", upserted)
 	}
 
-	logger.Info("anilist relations finished", "upserted", upserted)
+	logger.Info("anilist relations finished", "upserted", upserted, "attempted", processed)
 	return nil
 }
 
