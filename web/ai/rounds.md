@@ -38,9 +38,20 @@ until a winner is picked — only then does it move into the component file.
 
 ## Guardrails
 
-- **One file, no cross-imports.** Keep variant styling inline on the `/test`
-  page. Don't edit the production component until a winner is chosen —
-  otherwise the "compare" step is lying.
+- **Use the real components.** Build with the production primitives from
+  `src/components/ui/` first-hand — `Button`, `Input`, `Select`, `Switch`,
+  `Table`, and friends — not hand-rolled `<button>` / `<input>` / `<select>`.
+  Before reaching for one, read its doc in [`ai/ui/`](./ui/)
+  (`ai/ui/<component>.md`), or open the component source in
+  `src/components/ui/<component>.tsx` to confirm the props. The *only* thing
+  that stays local on the page is the styling of the surface actually under
+  test — every surrounding control should be the real component so the vote
+  reflects the production surface.
+- **One file, no cross-imports of variant styling.** Keep the under-test
+  variant styling inline on the page. Don't edit the production component
+  until a winner is chosen — otherwise the "compare" step is lying. (Importing
+  the shipped components above is expected, that's not the same as editing the
+  component you're iterating on.)
 - **Identical sample content across variants.** If Variant A shows a
   success + warning + danger row, *every* variant shows the same row.
   Otherwise the vote compares content, not design.
