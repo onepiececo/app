@@ -35,9 +35,10 @@ export async function getDailyGames(_iso: string): Promise<DailyGame[]> {
   }));
 }
 
-export async function getAvailableDays(limit = 30, before?: string): Promise<string[]> {
+// Returns null when the API is unreachable, an array (possibly empty) when it answered.
+export async function getAvailableDays(limit = 30, before?: string): Promise<string[] | null> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (before) params.set("before", before);
   const res = await serverJSON<ServerDays>(`/v1/days?${params.toString()}`).catch(() => null);
-  return res?.dates ?? [];
+  return res === null ? null : res.dates;
 }

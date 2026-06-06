@@ -71,7 +71,7 @@ export const DayProvider = (props: DayProviderProps) => {
     const oldest = days[days.length - 1];
     if (!oldest) return;
     setLoadingMore(true);
-    const more = await getAvailableDays(PAGE_SIZE, oldest.iso);
+    const more = (await getAvailableDays(PAGE_SIZE, oldest.iso)) ?? [];
     setLoadingMore(false);
     if (more.length === 0) {
       setExhausted(true);
