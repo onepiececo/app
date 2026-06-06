@@ -42,11 +42,7 @@ type AnimateDigitsProps = {
 export const AnimateDigits = (props: AnimateDigitsProps) => {
   const variant = props.variant ?? "slot";
   const mounted = useMountedRef();
-  const str =
-    typeof props.value === "number" && props.pad
-      ? String(props.value).padStart(props.pad, "0")
-      : String(props.value);
-  const chars = str.split("");
+  const chars = String(props.value).padStart(props.pad ?? 0, "0").split("");
 
   return (
     <span
