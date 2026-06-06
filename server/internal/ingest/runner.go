@@ -23,8 +23,6 @@ const upsertMaxAttempts = 4
 // anilistMu serializes AniList access so a duplicate or overlapping pass never doubles the request rate.
 var anilistMu sync.Mutex
 
-func itoa(n int) string { return strconv.Itoa(n) }
-
 // AniListRunOptions controls how much to ingest in a single pass.
 type AniListRunOptions struct {
 	// PerPage is AniList items per page. Max 50.
@@ -35,9 +33,7 @@ type AniListRunOptions struct {
 	RPMLimit int
 }
 
-// RunAniListOnce pulls AniList by popularity until HasNextPage is false or MaxPages is hit.
-// Throttles to RPMLimit, retries on RateLimitError.
-// Every page's raw payload lands in source_payloads, every anime is linked via source_id_map.
+// RunAniListOnce crawls AniList by popularity into source_payloads and the catalog, throttled to RPMLimit and retrying rate limits.
 func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRunOptions) (runErr error) {
 	anilistMu.Lock()
 	defer anilistMu.Unlock()
@@ -115,7 +111,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 	return nil
 }
 
-// upsertMedia writes a batch of records through a bounded worker pool and returns how many were saved.
+// upsertMedia writes a batch of records through a bounded worker pool.
 func upsertMedia(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, items []anilistMedia) int {
 	var done atomic.Int64
 	var wg sync.WaitGroup
@@ -140,9 +136,9 @@ dispatch:
 	return int(done.Load())
 }
 
-// processItem saves the raw payload, upserts the anime, and links its external id. Returns whether the anime was written.
+// processItem saves the raw payload, upserts the anime, and links its external id.
 func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, m anilistMedia) bool {
-	sourceID := itoa(m.ID)
+	sourceID := strconv.Itoa(m.ID)
 	if _, err := SavePayload(ctx, pool, "anilist", sourceID, m); err != nil {
 		if !errors.Is(err, context.Canceled) {
 			logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
@@ -204,8 +200,7 @@ type AniListRelationOptions struct {
 	RPMLimit int
 }
 
-// RunAniListRelationsOnce fetches related anime that existing records reference but the catalog is missing.
-// It runs before the popularity crawl so the relation graph fills in before brand new shows are added.
+// RunAniListRelationsOnce backfills related anime that existing records reference but the catalog is missing, before the popularity crawl.
 func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRelationOptions) (runErr error) {
 	anilistMu.Lock()
 	defer anilistMu.Unlock()

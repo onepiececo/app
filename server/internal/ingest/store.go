@@ -59,8 +59,7 @@ func (r *Run) Finish(ctx context.Context, pool *pgxpool.Pool, runErr error) erro
 	return err
 }
 
-// SavePayload upserts the raw API response keyed by (source, source_id).
-// Returns true if the payload changed since the last save.
+// SavePayload upserts the raw API response keyed by (source, source_id) and reports whether it changed since the last save.
 func SavePayload(ctx context.Context, pool *pgxpool.Pool, source, sourceID string, payload any) (bool, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {

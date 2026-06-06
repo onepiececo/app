@@ -282,9 +282,9 @@ func (c *AniListClient) FetchByIDs(ctx context.Context, ids []int) ([]anilistMed
 
 // ToUpsert maps a raw AniList media record into an anime.AnimeUpsert payload.
 func toUpsert(m anilistMedia) *anime.AnimeUpsert {
-	title := pickTitle(m.Title.English, m.Title.UserPreferred, m.Title.Romaji, m.Title.Native)
-	if title == "" {
-		title = "Untitled"
+	title := "Untitled"
+	if t := firstNonEmpty(m.Title.English, m.Title.UserPreferred, m.Title.Romaji, m.Title.Native); t != nil {
+		title = strings.TrimSpace(*t)
 	}
 
 	slug := anime.Slugify(title) + "-" + strconv.FormatInt(int64(m.ID), 36)
@@ -313,7 +313,7 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		Popularity:      m.Popularity,
 		Favourites:      m.Favourites,
 		IsAdult:         m.IsAdult,
-		CoverSourceURL:  dropAniListDefault(pickURL(m.CoverImage.ExtraLarge, m.CoverImage.Large)),
+		CoverSourceURL:  dropAniListDefault(firstNonEmpty(m.CoverImage.ExtraLarge, m.CoverImage.Large)),
 		BannerSourceURL: dropAniListDefault(m.BannerImage),
 		CoverColor:      m.CoverImage.Color,
 	}
@@ -367,8 +367,8 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 	}
 
 	for _, edge := range m.Characters.Edges {
-		name := pickTitle(edge.Node.Name.Full, edge.Node.Name.Native)
-		if name == "" || edge.Node.ID == 0 {
+		name := firstNonEmpty(edge.Node.Name.Full, edge.Node.Name.Native)
+		if name == nil || edge.Node.ID == 0 {
 			continue
 		}
 		role := edge.Role
@@ -378,7 +378,7 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		u.Characters = append(u.Characters, anime.CharacterUpsert{
 			Source:     "anilist",
 			SourceID:   strconv.Itoa(edge.Node.ID),
-			NameFull:   name,
+			NameFull:   strings.TrimSpace(*name),
 			NameNative: edge.Node.Name.Native,
 			ImageURL:   dropAniListDefault(edge.Node.Image.Large),
 			Gender:     edge.Node.Gender,
@@ -390,13 +390,14 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 	return u
 }
 
-func pickTitle(opts ...*string) string {
+// firstNonEmpty returns the first pointer whose trimmed value is non-empty.
+func firstNonEmpty(opts ...*string) *string {
 	for _, o := range opts {
 		if o != nil && strings.TrimSpace(*o) != "" {
-			return strings.TrimSpace(*o)
+			return o
 		}
 	}
-	return ""
+	return nil
 }
 
 // dropAniListDefault returns nil for AniList placeholder art so a missing image reads as such rather than carrying the default.
@@ -405,15 +406,6 @@ func dropAniListDefault(u *string) *string {
 		return nil
 	}
 	return u
-}
-
-func pickURL(opts ...*string) *string {
-	for _, o := range opts {
-		if o != nil && *o != "" {
-			return o
-		}
-	}
-	return nil
 }
 
 func collectAliases(m anilistMedia) []string {
