@@ -18,9 +18,10 @@ func NewAnimeHandler(store *anime.Store) *AnimeHandler {
 
 func (h *AnimeHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
+	format := r.URL.Query().Get("format")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 
-	hits, err := h.store.Search(r.Context(), q, limit)
+	hits, err := h.store.Search(r.Context(), q, format, limit)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "search_failed", Message: err.Error()})
 		return
