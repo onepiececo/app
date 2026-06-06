@@ -88,7 +88,7 @@ const Cover = (props: { url?: string; alt: string; color?: string }) => {
       className={cn("relative aspect-2/3 w-32 shrink-0 overflow-hidden sm:w-44", !props.color && "bg-muted/40")}
       style={tint}
     >
-      <Image src={props.url} alt={props.alt} fill sizes="(max-width: 640px) 8rem, 11rem" className="object-cover" />
+      <Image src={props.url} alt={props.alt} fill sizes="(max-width: 640px) 8rem, 11rem" className="object-cover" priority />
     </div>
   );
 };

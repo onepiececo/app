@@ -15,6 +15,8 @@ type AnimeCoverProps = {
   className?: string;
   // Blur intensity 0 to 2000. Zero ships a sharp image.
   blur?: number;
+  // Eager load and fetch with high priority for an above-the-fold cover so it is not lazy loaded.
+  priority?: boolean;
 };
 
 export const AnimeCover = (props: AnimeCoverProps) => {
@@ -44,6 +46,7 @@ export const AnimeCover = (props: AnimeCoverProps) => {
         alt={props.alt}
         width={props.width}
         height={props.height}
+        priority={props.priority}
         onLoad={() => setLoaded(true)}
         className={cn("h-full w-full object-cover transition-opacity duration-500", loaded ? "opacity-100" : "opacity-0")}
       />
