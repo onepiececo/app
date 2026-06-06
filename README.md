@@ -21,13 +21,9 @@ Migrations run on server boot, both services share the Postgres at `localhost:54
 
 ## Populating the Catalog
 
-One command pulls AniList every hour and runs Jikan enrichment every 30 minutes, both throttled to their published rate limits.
+The server owns ingestion. It pulls AniList every hour and runs Jikan enrichment every 30 minutes, both throttled to their published rate limits, and each AniList pass first backfills related anime the catalog references but is missing before crawling new ones.
 
-```bash
-cd server && go run ./cmd/onepiece-cli ingest
-```
-
-Pass `--once` for a single pass of each source and exit, or override any tuning via `--anilist-pages`, `--anilist-interval`, `--jikan-batch`, `--jikan-interval`, etc.
+Set `INGEST_EMBEDDED=false` to pause it, or tune the cadence through the `ANILIST_*` and `JIKAN_*` env vars.
 
 ## How It Works
 
@@ -70,9 +66,8 @@ Better Auth's `jwt()` plugin writes EdDSA keys to the `jwks` table, the Go serve
 
 ## API Reference
 
-The Go server exposes four scopes of routes.
+The Go server exposes three scopes of routes.
 
 - Public catalog and metadata, `/healthz`, `/v1/anime`, `/v1/anime/browse`, `/v1/anime/count`, `/v1/anime/by-id/{id}`, `/v1/anime/{slug}`, `/v1/games`, `/v1/days`, `/v1/puzzles/today`
 - Anonymous or signed in, `/v1/players/me`, `/v1/puzzles/{id}/guesses`, `/v1/puzzles/{id}/complete`, send either `Authorization: Bearer <jwt>` or `X-Anonymous-Key: <random>`
 - Signed in only, `/v1/me`, requires a valid Better Auth JWT
-- CLI only, `onepiece-cli ingest` for catalog population

@@ -7,6 +7,5 @@ node_modules/
 dist/
 tmp/
 server/onepiece
-server/onepiece-cli
 .DS_Store
 nul
