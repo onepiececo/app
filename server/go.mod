@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
-	github.com/kylegrahammatzen/winter v0.0.0-20260606045850-f3e9279d7e76
+	github.com/kylegrahammatzen/winter v0.0.0-20260606152916-f2cf1ad5aac3
 	github.com/lmittmann/tint v1.1.3
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/text v0.32.0
