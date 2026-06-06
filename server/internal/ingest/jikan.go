@@ -124,6 +124,7 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 	logger.Info("jikan enrich started", "candidates", len(candidates), "rpm", opts.RPMLimit, "per_sec", opts.PerSecond)
 
 	enriched := 0
+	failed := 0
 	for _, c := range candidates {
 		select {
 		case <-ctx.Done():
@@ -148,10 +149,13 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 				}
 				continue
 			}
-			logger.Warn("jikan fetch failed", "mal_id", c.MalID, "error", err)
+			if !errors.Is(err, context.Canceled) {
+				logger.Debug("jikan fetch failed", "mal_id", c.MalID, "error", err)
+				failed++
+			}
 			continue
 		}
-		logger.Info("jikan enrich", "mal_id", c.MalID, "title", data.Title, "fetch_ms", time.Since(fetchStart).Milliseconds())
+		logger.Debug("jikan enrich", "mal_id", c.MalID, "title", data.Title, "fetch_ms", time.Since(fetchStart).Milliseconds())
 
 		if _, err := SavePayload(ctx, pool, "jikan", strconv.Itoa(c.MalID), data); err != nil {
 			logger.Warn("save jikan payload failed", "mal_id", c.MalID, "error", err)
@@ -191,7 +195,7 @@ func RunJikanOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, 
 	}
 
 	_ = run.Bump(ctx, pool, len(candidates), enriched, nil)
-	logger.Info("jikan enrich finished", "enriched", enriched, "candidates", len(candidates))
+	logger.Info("jikan enrich finished", "enriched", enriched, "failed", failed, "candidates", len(candidates))
 	return nil
 }
 

@@ -20,6 +20,9 @@ const ingestWorkers = 5
 // upsertMaxAttempts retries an upsert that loses a deadlock against a record sharing a studio, genre, or tag row.
 const upsertMaxAttempts = 4
 
+// anilistMu serializes AniList access so a duplicate or overlapping pass never doubles the request rate.
+var anilistMu sync.Mutex
+
 func itoa(n int) string { return strconv.Itoa(n) }
 
 // AniListRunOptions controls how much to ingest in a single pass.
@@ -36,6 +39,9 @@ type AniListRunOptions struct {
 // Throttles to RPMLimit, retries on RateLimitError.
 // Every page's raw payload lands in source_payloads, every anime is linked via source_id_map.
 func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRunOptions) (runErr error) {
+	anilistMu.Lock()
+	defer anilistMu.Unlock()
+
 	if opts.PerPage <= 0 || opts.PerPage > 50 {
 		opts.PerPage = 50
 	}
@@ -93,7 +99,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 
 		pagesDone++
 		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
-		logger.Info("anilist page", "page", page, "rows", len(res.Items), "fetch_ms", fetchElapsed.Milliseconds(), "total_upserted", upserted)
+		logger.Debug("anilist page", "page", page, "rows", len(res.Items), "fetch_ms", fetchElapsed.Milliseconds(), "total_upserted", upserted)
 
 		if !res.HasNextPage {
 			break
@@ -138,17 +144,23 @@ dispatch:
 func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, m anilistMedia) bool {
 	sourceID := itoa(m.ID)
 	if _, err := SavePayload(ctx, pool, "anilist", sourceID, m); err != nil {
-		logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
+		if !errors.Is(err, context.Canceled) {
+			logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
+		}
 		return false
 	}
 	u := toUpsert(m)
 	animeID, err := upsertWithRetry(ctx, store, logger, m.ID, u)
 	if err != nil {
-		logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
+		if !errors.Is(err, context.Canceled) {
+			logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
+		}
 		return false
 	}
 	if err := MapExternalID(ctx, pool, "anilist", sourceID, animeID); err != nil {
-		logger.Warn("map external id failed", "anilist_id", m.ID, "error", err)
+		if !errors.Is(err, context.Canceled) {
+			logger.Warn("map external id failed", "anilist_id", m.ID, "error", err)
+		}
 		return false
 	}
 	return true
@@ -195,6 +207,9 @@ type AniListRelationOptions struct {
 // RunAniListRelationsOnce fetches related anime that existing records reference but the catalog is missing.
 // It runs before the popularity crawl so the relation graph fills in before brand new shows are added.
 func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRelationOptions) (runErr error) {
+	anilistMu.Lock()
+	defer anilistMu.Unlock()
+
 	if opts.MaxIDs <= 0 {
 		opts.MaxIDs = 100
 	}
@@ -236,12 +251,14 @@ func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *sl
 
 		media, err := fetchByIDsRetry(ctx, client, logger, batch)
 		if err != nil {
-			logger.Error("anilist relations fetch failed", "error", err)
+			if !errors.Is(err, context.Canceled) {
+				logger.Error("anilist relations fetch failed", "error", err)
+			}
 			return err
 		}
 		upserted += upsertMedia(ctx, pool, store, logger, media)
 		_ = run.Bump(ctx, pool, len(media), upserted, map[string]int{"remaining": len(ids)})
-		logger.Info("anilist relations batch", "ids", len(batch), "found", len(media), "total_upserted", upserted)
+		logger.Debug("anilist relations batch", "ids", len(batch), "found", len(media), "total_upserted", upserted)
 	}
 
 	logger.Info("anilist relations finished", "upserted", upserted)
