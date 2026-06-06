@@ -1,0 +1,1 @@
+ALTER TABLE anime_relation ADD COLUMN to_anime_id BIGINT REFERENCES anime(id) ON DELETE SET NULL;

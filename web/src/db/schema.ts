@@ -189,7 +189,6 @@ export const animeRelation = pgTable("anime_relation", {
   fromAnimeId: bigint("from_anime_id", { mode: "number" })
     .notNull()
     .references(() => anime.id, { onDelete: "cascade" }),
-  toAnimeId: bigint("to_anime_id", { mode: "number" }).references(() => anime.id, { onDelete: "set null" }),
   externalToSource: text("external_to_source"),
   externalToId: text("external_to_id"),
   relationType: text("relation_type").notNull(),

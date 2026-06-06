@@ -88,10 +88,11 @@ func (s *Store) GetDetailByID(ctx context.Context, id int64) (*Detail, error) {
 		WHERE asx.anime_id = $1 ORDER BY asx.is_main DESC, s.name ASC
 	`, id)
 	batch.Queue(`
-		SELECT ar.relation_type, ar.to_anime_id, a.title_primary, a.slug, a.cover_source_url, a.season_year,
+		SELECT ar.relation_type, a.id, a.title_primary, a.slug, a.cover_source_url, a.season_year,
 		       ar.external_to_source, ar.external_to_id
 		FROM anime_relation ar
-		LEFT JOIN anime a ON a.id = ar.to_anime_id
+		LEFT JOIN source_id_map m ON m.source = ar.external_to_source AND m.source_id = ar.external_to_id
+		LEFT JOIN anime a ON a.id = m.anime_id
 		WHERE ar.from_anime_id = $1
 		ORDER BY ar.relation_type ASC, a.season_year DESC NULLS LAST
 	`, id)
