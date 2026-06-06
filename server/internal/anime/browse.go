@@ -17,7 +17,7 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*)
 		FROM anime
-		WHERE is_adult = false AND title_primary IS NOT NULL
+		WHERE is_adult = false AND title_primary IS NOT NULL AND average_score IS NOT NULL
 	`).Scan(&n)
 	if err != nil {
 		return 0, err
@@ -69,7 +69,7 @@ func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset i
 	q := fmt.Sprintf(`
 		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0), cover_source_url, cover_color
 		FROM anime
-		WHERE is_adult = false AND title_primary IS NOT NULL%s
+		WHERE is_adult = false AND title_primary IS NOT NULL AND average_score IS NOT NULL%s
 		ORDER BY %s
 		LIMIT $1 OFFSET $2
 	`, formatClause, orderBy)
