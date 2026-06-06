@@ -21,7 +21,7 @@ export default async function AnimePage(props: PageProps<"/anime">) {
   const rawFormat = typeof sp.format === "string" ? sp.format : "all";
   const format = VALID_FORMATS.has(rawFormat) ? rawFormat : "all";
   const [anime, total] = await Promise.all([
-    q.length > 0 ? searchAnime(q, 50) : browseAnime(sort, PAGE_SIZE, undefined, format),
+    q.length > 0 ? searchAnime(q, format, 50) : browseAnime(sort, PAGE_SIZE, undefined, format),
     getAnimeCount(),
   ]);
 

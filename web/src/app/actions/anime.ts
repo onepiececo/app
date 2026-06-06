@@ -27,9 +27,10 @@ export async function browseAnime(
   return serverJSON<AnimeHit[]>(`/v1/anime/browse?${params.toString()}`).catch(() => []);
 }
 
-export async function searchAnime(q: string, limit = 50): Promise<AnimeHit[]> {
+export async function searchAnime(q: string, format = "all", limit = 50): Promise<AnimeHit[]> {
   if (!q.trim()) return [];
   const params = new URLSearchParams({ q, limit: String(limit) });
+  if (format && format !== "all") params.set("format", format);
   return serverJSON<AnimeHit[]>(`/v1/anime?${params.toString()}`).catch(() => []);
 }
 
