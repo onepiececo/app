@@ -22,9 +22,9 @@ export const toggleVariants = tv({
   },
   variants: {
     size: {
-      default: "h-9 min-w-9 px-[calc(--spacing(2)-1px)] text-base sm:h-8 sm:min-w-8 sm:text-sm",
-      lg: "h-10 min-w-10 px-[calc(--spacing(2.5)-1px)] text-base sm:h-9 sm:min-w-9 sm:text-sm",
-      sm: "h-8 min-w-8 px-[calc(--spacing(1.5)-1px)] text-sm sm:h-7 sm:min-w-7 sm:text-xs",
+      default: "h-9 min-w-9 px-[calc(--spacing(3)-1px)] text-base sm:h-8 sm:min-w-8 sm:text-sm",
+      lg: "h-10 min-w-10 px-[calc(--spacing(3.5)-1px)] text-base sm:h-9 sm:min-w-9 sm:text-sm",
+      sm: "h-8 min-w-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:h-7 sm:min-w-7 sm:text-xs",
     },
     variant: {
       ghost: cn(
