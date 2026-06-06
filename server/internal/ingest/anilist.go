@@ -221,23 +221,48 @@ func NewAniListClient() *AniListClient {
 	return &AniListClient{HTTP: &http.Client{Timeout: 30 * time.Second}}
 }
 
-// do posts one GraphQL query and decodes the shared response shape, surfacing a RateLimitError on 429.
+// do posts one GraphQL query, retrying AniList's transient 5xx and network errors a few times.
+// A 429 still surfaces as RateLimitError so the callers can wait out the retry-after window.
 func (c *AniListClient) do(ctx context.Context, query string, variables map[string]any) (*anilistResponse, error) {
 	body, _ := json.Marshal(map[string]any{
 		"query":     query,
 		"variables": variables,
 	})
 
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := range maxAttempts {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt) * 2 * time.Second):
+			}
+		}
+		parsed, retryable, err := c.doOnce(ctx, body)
+		if err == nil {
+			return parsed, nil
+		}
+		lastErr = err
+		if !retryable {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+// doOnce runs a single request and reports whether the error is worth retrying.
+func (c *AniListClient) doOnce(ctx context.Context, body []byte) (*anilistResponse, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anilistEndpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("accept", "application/json")
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Err() == nil, err
 	}
 	defer resp.Body.Close()
 
@@ -246,21 +271,25 @@ func (c *AniListClient) do(ctx context.Context, query string, variables map[stri
 		if secs <= 0 {
 			secs = 60
 		}
-		return nil, RateLimitError{RetryAfter: time.Duration(secs) * time.Second}
+		return nil, false, RateLimitError{RetryAfter: time.Duration(secs) * time.Second}
+	}
+	if resp.StatusCode >= 500 {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, true, fmt.Errorf("anilist %d: %s", resp.StatusCode, string(raw))
 	}
 	if resp.StatusCode >= 400 {
 		raw, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("anilist %d: %s", resp.StatusCode, string(raw))
+		return nil, false, fmt.Errorf("anilist %d: %s", resp.StatusCode, string(raw))
 	}
 
 	var parsed anilistResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if len(parsed.Errors) > 0 {
-		return nil, fmt.Errorf("anilist graphql error: %s", parsed.Errors[0].Message)
+		return nil, false, fmt.Errorf("anilist graphql error: %s", parsed.Errors[0].Message)
 	}
-	return &parsed, nil
+	return &parsed, false, nil
 }
 
 func (c *AniListClient) FetchPage(ctx context.Context, page, perPage int) (*AniListPage, error) {

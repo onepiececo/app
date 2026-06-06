@@ -66,7 +66,8 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 			case sw.status >= 400:
 				child.Warn("request", attrs...)
 			default:
-				child.Info("request", attrs...)
+				// Successful requests are debug only so the high-frequency polls do not flood the log.
+				child.Debug("request", attrs...)
 			}
 		})
 	}

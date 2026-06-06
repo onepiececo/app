@@ -87,12 +87,17 @@ func RegisterWinter(ctx context.Context, server *winter.Server, client *winter.C
 
 	winter.HandleFunc(server, func(c context.Context, _ *winter.Job[AniListRelations]) error {
 		// Swallow the error so a failed backfill never blocks the chained crawl, the next pass retries it.
-		if err := RunAniListRelationsOnce(c, pool, logger, AniListRelationOptions{
+		err := RunAniListRelationsOnce(c, pool, logger, AniListRelationOptions{
 			MaxIDs:   opts.AniListRelationIDs,
 			RPMLimit: opts.AniListRPM,
-		}); err != nil && !errors.Is(err, context.Canceled) {
+		})
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
+		if err != nil {
 			logger.Error("anilist relations run failed", "error", err)
 		}
+		logNextRun(logger, "anilist relations", opts.AniListCron)
 		return nil
 	})
 
