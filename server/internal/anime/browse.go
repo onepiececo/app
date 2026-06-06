@@ -2,6 +2,8 @@ package anime
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -37,42 +39,85 @@ var validFormats = map[string]bool{
 	"SPECIAL":  true,
 }
 
-// Browse returns anime sorted by the requested column, paginated, optionally
-// filtered by format. Sort and format are whitelisted server-side so the
-// values are safe to interpolate.
-func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset int) ([]Hit, error) {
+// browseCursor is the opaque keyset position, the last row's sort value plus its id as the stable tiebreak.
+type browseCursor struct {
+	P  any   `json:"p"`
+	ID int64 `json:"id"`
+}
+
+func encodeCursor(p any, id int64) string {
+	raw, _ := json.Marshal(browseCursor{P: p, ID: id})
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeCursor(s string) (*browseCursor, bool) {
+	if s == "" {
+		return nil, false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return nil, false
+	}
+	var c browseCursor
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return nil, false
+	}
+	return &c, true
+}
+
+// cursorValue coerces the JSON-decoded cursor key back to the type its sort column compares against.
+func cursorValue(sort string, p any) any {
+	if sort == "title" {
+		s, _ := p.(string)
+		return s
+	}
+	f, _ := p.(float64)
+	return int64(f)
+}
+
+// Browse returns anime for the requested sort and optional format using keyset
+// pagination. The after cursor walks past the last row of the previous page so
+// deep pages cost the same as the first. Sort and format are whitelisted
+// server-side so the order and filter are safe to interpolate.
+func (s *Store) Browse(ctx context.Context, sort, format string, limit int, after string) ([]Hit, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	if offset < 0 {
-		offset = 0
-	}
-	var orderBy string
+
+	// keyExpr is the sort key, cmp is the inequality that walks past the cursor, id ASC is the stable tiebreak.
+	var keyExpr, cmp, orderBy string
 	switch sort {
 	case "popularity":
-		orderBy = "popularity DESC NULLS LAST, title_primary ASC"
+		keyExpr, cmp, orderBy = "popularity", "<", "popularity DESC, id ASC"
 	case "year":
-		orderBy = "season_year DESC NULLS LAST, title_primary ASC"
+		keyExpr, cmp, orderBy = "COALESCE(season_year, -1)", "<", "COALESCE(season_year, -1) DESC, id ASC"
 	case "score":
-		orderBy = "average_score DESC NULLS LAST, title_primary ASC"
+		keyExpr, cmp, orderBy = "average_score", "<", "average_score DESC, id ASC"
 	default:
-		orderBy = "title_primary ASC NULLS LAST"
+		sort = "title"
+		keyExpr, cmp, orderBy = "title_primary", ">", "title_primary ASC, id ASC"
 	}
 
-	formatClause := ""
-	args := []any{limit, offset}
+	where := "is_adult = false AND title_primary IS NOT NULL AND average_score IS NOT NULL"
+	var args []any
 	if validFormats[format] {
-		formatClause = " AND format = $3"
 		args = append(args, format)
+		where += fmt.Sprintf(" AND format = $%d", len(args))
 	}
+	if c, ok := decodeCursor(after); ok {
+		args = append(args, cursorValue(sort, c.P), c.ID)
+		p, id := len(args)-1, len(args)
+		where += fmt.Sprintf(" AND (%s %s $%d OR (%s = $%d AND id > $%d))", keyExpr, cmp, p, keyExpr, p, id)
+	}
+	args = append(args, limit)
 
 	q := fmt.Sprintf(`
-		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0), cover_source_url, cover_color
+		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0), popularity, cover_source_url, cover_color
 		FROM anime
-		WHERE is_adult = false AND title_primary IS NOT NULL AND average_score IS NOT NULL%s
+		WHERE %s
 		ORDER BY %s
-		LIMIT $1 OFFSET $2
-	`, formatClause, orderBy)
+		LIMIT $%d
+	`, where, orderBy, len(args))
 
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
@@ -83,11 +128,27 @@ func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset i
 	hits := make([]Hit, 0, limit)
 	for rows.Next() {
 		var h Hit
-		var avgScore float32
-		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &avgScore, &h.CoverSourceURL, &h.CoverColor); err != nil {
+		var avgScore, popularity int
+		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &avgScore, &popularity, &h.CoverSourceURL, &h.CoverColor); err != nil {
 			return nil, err
 		}
-		h.Score = avgScore
+		h.Score = float32(avgScore)
+
+		var p any
+		switch sort {
+		case "popularity":
+			p = popularity
+		case "year":
+			p = -1
+			if h.Year != nil {
+				p = *h.Year
+			}
+		case "score":
+			p = avgScore
+		default:
+			p = h.Title
+		}
+		h.Cursor = encodeCursor(p, h.ID)
 		hits = append(hits, h)
 	}
 	return hits, rows.Err()

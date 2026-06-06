@@ -10,6 +10,7 @@ export type AnimeHit = {
   score?: number;
   coverSourceUrl?: string;
   coverColor?: string;
+  cursor?: string;
 };
 
 export type AnimeSort = "title" | "popularity" | "year" | "score";
@@ -17,14 +18,11 @@ export type AnimeSort = "title" | "popularity" | "year" | "score";
 export async function browseAnime(
   sort: AnimeSort = "title",
   limit = 50,
-  offset = 0,
+  after?: string,
   format = "all",
 ): Promise<AnimeHit[]> {
-  const params = new URLSearchParams({
-    sort,
-    limit: String(limit),
-    offset: String(offset),
-  });
+  const params = new URLSearchParams({ sort, limit: String(limit) });
+  if (after) params.set("after", after);
   if (format && format !== "all") params.set("format", format);
   return serverJSON<AnimeHit[]>(`/v1/anime/browse?${params.toString()}`).catch(() => []);
 }

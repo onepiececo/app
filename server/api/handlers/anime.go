@@ -42,11 +42,11 @@ func (h *AnimeHandler) Count(w http.ResponseWriter, r *http.Request) {
 
 func (h *AnimeHandler) Browse(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	sort := r.URL.Query().Get("sort")
 	format := r.URL.Query().Get("format")
+	after := r.URL.Query().Get("after")
 
-	hits, err := h.store.Browse(r.Context(), sort, format, limit, offset)
+	hits, err := h.store.Browse(r.Context(), sort, format, limit, after)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "browse_failed", Message: err.Error()})
 		return

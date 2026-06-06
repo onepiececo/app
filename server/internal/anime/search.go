@@ -13,6 +13,8 @@ type Hit struct {
 	Score          float32 `json:"score,omitempty"`
 	CoverSourceURL *string `json:"coverSourceUrl,omitempty"`
 	CoverColor     *string `json:"coverColor,omitempty"`
+	// Cursor is the keyset pagination position for this row, set by Browse and empty for search.
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // Search runs a layered match against the alias table backed by a pg_trgm GIN index.

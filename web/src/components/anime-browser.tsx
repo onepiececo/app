@@ -48,7 +48,7 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
         if (live.loading || live.exhausted) return;
         const token = ++tokenRef.current;
         setLoading(true);
-        browseAnime(props.sort, props.pageSize, items.length, props.format)
+        browseAnime(props.sort, props.pageSize, items[items.length - 1]?.cursor, props.format)
           .then((next) => {
             if (token !== tokenRef.current) return;
             if (next.length === 0) {
