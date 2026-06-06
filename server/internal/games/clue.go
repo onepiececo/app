@@ -310,8 +310,7 @@ func seedToUint64(seed string) uint64 {
 	return h.Sum64()
 }
 
-// usedAnswerIDs returns every anime that has already appeared as a Daily Anime Clue answer.
-// Returns an empty slice (not nil) so it composes cleanly with `NOT (id = ANY($1))`.
+// usedAnswerIDs returns every anime that has already been a clue answer, as a non-nil slice so it composes with NOT (id = ANY($1)).
 func (e *ClueEngine) usedAnswerIDs(ctx context.Context) ([]int64, error) {
 	rows, err := e.pool.Query(ctx, `
 		SELECT (answer_key->>'animeId')::bigint

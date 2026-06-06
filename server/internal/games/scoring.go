@@ -10,8 +10,7 @@ import (
 // Scoring helpers shared by every game engine.
 // Base, popularity tier, and speed bonus all feed into one StandardScore call so a new game inherits the curve for free.
 
-// lookupAnswerPopularity reads the answer anime's popularity for a puzzle.
-// Returns 0 on missing or malformed answer_key (which collapses to the niche tier, the safe default).
+// lookupAnswerPopularity reads the answer anime's popularity, defaulting to 0 (the niche tier) when the answer_key is missing or malformed.
 func lookupAnswerPopularity(ctx context.Context, pool *pgxpool.Pool, puzzleID int64) (int, error) {
 	var pop int
 	err := pool.QueryRow(ctx, `

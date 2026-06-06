@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -53,8 +52,6 @@ func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, games)
 }
 
-var isoDateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
-
 // Days returns the distinct puzzle_date values, newest first, capped at the
 // requested limit (default 30, max 365). `before` lets the client keyset
 // paginate older windows by passing the oldest iso it currently knows.
@@ -71,8 +68,10 @@ func (h *CatalogHandler) Days(w http.ResponseWriter, r *http.Request) {
 		limit = 365
 	}
 	before := r.URL.Query().Get("before")
-	if before != "" && !isoDateRe.MatchString(before) {
-		before = ""
+	if before != "" {
+		if _, err := time.Parse("2006-01-02", before); err != nil {
+			before = ""
+		}
 	}
 
 	var rows pgx.Rows

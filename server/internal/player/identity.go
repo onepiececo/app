@@ -38,13 +38,8 @@ func (s *Store) ResolveAnonymous(ctx context.Context, keyHash string) (*Identity
 	if keyHash == "" {
 		return nil, errors.New("empty key hash")
 	}
-	var anonID uuid.UUID
-	if err := s.pool.QueryRow(ctx, `
-		INSERT INTO anonymous_player (anonymous_key_hash)
-		VALUES ($1)
-		ON CONFLICT (anonymous_key_hash) DO UPDATE SET anonymous_key_hash = EXCLUDED.anonymous_key_hash
-		RETURNING id
-	`, keyHash).Scan(&anonID); err != nil {
+	anonID, err := s.findOrCreateAnonymous(ctx, keyHash)
+	if err != nil {
 		return nil, err
 	}
 
@@ -65,6 +60,36 @@ func (s *Store) ResolveUser(ctx context.Context, userID string) (*Identity, erro
 		return nil, err
 	}
 	return &Identity{ID: id, UserID: &userID}, nil
+}
+
+// findOrCreateAnonymous resolves the anonymous_player id by key hash, reading first so a returning player never rewrites their row.
+func (s *Store) findOrCreateAnonymous(ctx context.Context, keyHash string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := s.pool.QueryRow(ctx, `SELECT id FROM anonymous_player WHERE anonymous_key_hash = $1`, keyHash).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, err
+	}
+
+	err = s.pool.QueryRow(ctx, `
+		INSERT INTO anonymous_player (anonymous_key_hash) VALUES ($1)
+		ON CONFLICT (anonymous_key_hash) DO NOTHING
+		RETURNING id
+	`, keyHash).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, err
+	}
+
+	// Race lost, another connection inserted first. Re query.
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM anonymous_player WHERE anonymous_key_hash = $1`, keyHash).Scan(&id); err != nil {
+		return uuid.Nil, err
+	}
+	return id, nil
 }
 
 func (s *Store) findOrCreateIdentity(ctx context.Context, column string, value any) (uuid.UUID, error) {
