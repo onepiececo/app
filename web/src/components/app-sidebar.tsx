@@ -109,7 +109,7 @@ const DateButton = () => {
             className={cn(
               "flex w-full cursor-pointer flex-col overflow-hidden rounded-md p-2 text-left outline-none transition-[width,padding,gap] duration-300 ease-out hover:bg-accent/40 focus-visible:bg-accent/50",
               "items-start gap-1",
-              "in-data-[collapsed=true]:size-8! in-data-[collapsed=true]:items-center in-data-[collapsed=true]:justify-center in-data-[collapsed=true]:gap-0 in-data-[collapsed=true]:p-0!",
+              "in-data-[collapsed=true]:size-8! in-data-[collapsed=true]:justify-center in-data-[collapsed=true]:gap-0 in-data-[collapsed=true]:px-1.5!",
             )}
           />
         }
