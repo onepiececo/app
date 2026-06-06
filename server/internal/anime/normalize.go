@@ -3,6 +3,7 @@ package anime
 import (
 	"regexp"
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/text/runes"
@@ -10,18 +11,27 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+// diacriticPool hands each caller its own transformer since transform chains hold state and are not safe to share across goroutines.
+var diacriticPool = sync.Pool{
+	New: func() any {
+		return transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	},
+}
+
 var (
-	rmDiacritic = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
-	seasonRe    = regexp.MustCompile(`(?i)\b(season|s)\s*0*(\d+)\b`)
-	whitespace  = regexp.MustCompile(`\s+`)
-	punct       = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
+	seasonRe   = regexp.MustCompile(`(?i)\b(season|s)\s*0*(\d+)\b`)
+	whitespace = regexp.MustCompile(`\s+`)
+	punct      = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 )
 
 // Normalize returns a canonical form for comparison and search keys.
 // Lowercases, strips diacritics and punctuation, collapses `season N` to `sN`, squashes whitespace.
 func Normalize(s string) string {
 	s = strings.ToLower(s)
-	if r, _, err := transform.String(rmDiacritic, s); err == nil {
+	t := diacriticPool.Get().(transform.Transformer)
+	r, _, err := transform.String(t, s)
+	diacriticPool.Put(t)
+	if err == nil {
 		s = r
 	}
 	s = punct.ReplaceAllString(s, " ")
