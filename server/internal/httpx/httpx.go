@@ -3,12 +3,8 @@ package httpx
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 )
-
-// maxBodyBytes caps decoded request bodies so unbounded payloads cannot exhaust memory.
-const maxBodyBytes = 64 << 10
 
 type ctxKey string
 
@@ -53,9 +49,4 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(data)
-}
-
-func DecodeJSON(r *http.Request, dst any) error {
-	defer r.Body.Close()
-	return json.NewDecoder(io.LimitReader(r.Body, maxBodyBytes)).Decode(dst)
 }

@@ -12,13 +12,6 @@ type Config struct {
 	LogLevel    string `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat   string `env:"LOG_FORMAT" envDefault:"json"`
 
-	// PuzzleBackfillDays controls how far back the puzzle worker generates history on each pass.
-	// 30 means new players can replay the last month of puzzles.
-	PuzzleBackfillDays int `env:"PUZZLE_BACKFILL_DAYS" envDefault:"30"`
-
-	// PuzzleCron drives how often the Winter puzzle worker tops up missing daily puzzles.
-	PuzzleCron string `env:"PUZZLE_CRON" envDefault:"0 * * * *"`
-
 	// RedisAddr is the Redis backing the Winter task queue that drives ingestion.
 	RedisAddr string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
 

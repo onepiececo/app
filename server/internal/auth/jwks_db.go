@@ -16,6 +16,9 @@ import (
 // ErrJWKSNotLoaded is returned by Keyfunc before the first successful key load.
 var ErrJWKSNotLoaded = errors.New("jwks keyfunc not loaded")
 
+// ErrNoJWKSKeys means the jwks table is empty, the expected cold-start state until Better Auth mints its first key.
+var ErrNoJWKSKeys = errors.New("no jwks keys found")
+
 // JWKSStore reads JWKS public keys from the shared postgres jwks table written by Better Auth and verifies tokens against them.
 type JWKSStore struct {
 	pool   *pgxpool.Pool
@@ -68,7 +71,9 @@ func (s *JWKSStore) StartRefresh(ctx context.Context, interval time.Duration) {
 			refreshCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err := s.Load(refreshCtx)
 			cancel()
-			if err != nil {
+			if errors.Is(err, ErrNoJWKSKeys) {
+				s.logger.Debug("jwks refresh, no keys yet")
+			} else if err != nil {
 				s.logger.Warn("jwks refresh failed", "error", err)
 			}
 		}
@@ -106,7 +111,7 @@ func (s *JWKSStore) buildKeyfunc(ctx context.Context) (keyfunc.Keyfunc, error) {
 		return nil, err
 	}
 	if len(keys) == 0 {
-		return nil, errors.New("no valid jwks keys found")
+		return nil, ErrNoJWKSKeys
 	}
 
 	raw, err := json.Marshal(struct {

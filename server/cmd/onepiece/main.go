@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,7 +19,6 @@ import (
 	"github.com/kgrahammatzen/onepiece-server/api"
 	"github.com/kgrahammatzen/onepiece-server/config"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
-	"github.com/kgrahammatzen/onepiece-server/internal/games"
 	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
@@ -53,26 +53,20 @@ func main() {
 	}
 
 	jwks := auth.NewJWKSStore(pool, logger)
-	if err := jwks.Load(ctx); err != nil {
+	if err := jwks.Load(ctx); errors.Is(err, auth.ErrNoJWKSKeys) {
+		logger.Debug("jwks not loaded, no keys yet")
+	} else if err != nil {
 		logger.Warn("jwks initial load failed, will retry on schedule", "error", err)
 	}
 	go jwks.StartRefresh(ctx, 5*time.Minute)
 
-	clueEngine := games.NewClueEngine(pool)
-	wordleEngine := games.NewWordleEngine(pool)
-	engines := map[string]games.GameEngine{
-		clueEngine.GameID():   clueEngine,
-		wordleEngine.GameID(): wordleEngine,
-	}
-
-	startWinter(ctx, cfg, pool, logger, []games.GameEngine{clueEngine, wordleEngine})
+	startWinter(ctx, cfg, pool, logger)
 
 	router := api.NewRouter(api.RouterConfig{
-		Pool:    pool,
-		JWKS:    jwks,
-		Logger:  logger,
-		WebURL:  cfg.WebURL,
-		Engines: engines,
+		Pool:   pool,
+		JWKS:   jwks,
+		Logger: logger,
+		WebURL: cfg.WebURL,
 	})
 
 	srv := &http.Server{
@@ -107,9 +101,14 @@ func main() {
 	}
 }
 
-// startWinter brings up one Redis backed Winter server that owns puzzle generation and, when enabled, ingestion.
+// startWinter brings up one Redis backed Winter server for embedded ingestion.
 // Redis being unavailable disables background jobs but never takes the API down.
-func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger, engines []games.GameEngine) {
+func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger) {
+	if !cfg.IngestEmbedded {
+		logger.Info("ingest not embedded, background jobs disabled")
+		return
+	}
+
 	redisCfg := winter.RedisConfig{Addr: cfg.RedisAddr}
 
 	client, err := winter.NewClient(redisCfg)
@@ -118,11 +117,6 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 		return
 	}
 
-	puzzleOpts := games.PuzzleWinterOptions{
-		Cron:         cfg.PuzzleCron,
-		BackfillDays: cfg.PuzzleBackfillDays,
-		Engines:      engines,
-	}
 	ingestOpts := ingest.WinterOptions{
 		CrawlEnabled:       cfg.AniListCrawlEnabled,
 		JikanEnabled:       cfg.JikanEnabled,
@@ -136,18 +130,11 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 		JikanPerSecond:     cfg.JikanPerSecond,
 	}
 
-	cron := games.WinterCron(puzzleOpts)
-	queues := []any{"puzzle", 2}
-	if cfg.IngestEmbedded {
-		cron = append(cron, ingest.WinterCron(ingestOpts)...)
-		queues = append(queues, "anilist", 3, "jikan", 1)
-	}
-
 	server, err := winter.NewServer(redisCfg, winter.ServerConfig{
 		Concurrency: cfg.IngestConcurrency,
 		Logger:      newLogger("warn", cfg.LogFormat),
-		Queues:      winter.Queues(queues...),
-		Cron:        cron,
+		Queues:      winter.Queues("anilist", 3, "jikan", 1),
+		Cron:        ingest.WinterCron(ingestOpts),
 	})
 	if err != nil {
 		logger.Error("failed to start winter server", "error", err)
@@ -155,10 +142,7 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 		return
 	}
 
-	games.RegisterWinter(ctx, server, client, pool, logger, puzzleOpts)
-	if cfg.IngestEmbedded {
-		ingest.RegisterWinter(ctx, server, client, pool, logger, ingestOpts)
-	}
+	ingest.RegisterWinter(ctx, server, client, pool, logger, ingestOpts)
 	server.Use(winter.Recover())
 	server.OnDead(func(_ context.Context, ev winter.JobEvent) {
 		logger.Error("background job dead", "kind", ev.Kind, "job_id", ev.ID, "error", ev.Err)
@@ -175,7 +159,7 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 		_ = client.Close()
 	}()
 
-	logger.Info("winter started", "redis", cfg.RedisAddr, "puzzle_cron", cfg.PuzzleCron, "ingest_embedded", cfg.IngestEmbedded)
+	logger.Info("winter started", "redis", cfg.RedisAddr, "anilist_cron", cfg.AniListCron)
 }
 
 func newLogger(level, format string) *slog.Logger {
