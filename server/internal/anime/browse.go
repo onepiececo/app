@@ -67,7 +67,7 @@ func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset i
 	}
 
 	q := fmt.Sprintf(`
-		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0)
+		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0), cover_source_url, cover_color
 		FROM anime
 		WHERE is_adult = false AND title_primary IS NOT NULL%s
 		ORDER BY %s
@@ -84,7 +84,7 @@ func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset i
 	for rows.Next() {
 		var h Hit
 		var avgScore float32
-		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &avgScore); err != nil {
+		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &avgScore, &h.CoverSourceURL, &h.CoverColor); err != nil {
 			return nil, err
 		}
 		h.Score = avgScore

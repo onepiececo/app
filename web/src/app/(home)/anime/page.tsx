@@ -9,7 +9,7 @@ export const metadata = {
 
 const VALID_SORTS = new Set<AnimeSort>(["title", "popularity", "year", "score"]);
 const VALID_FORMATS = new Set(["all", "TV", "TV_SHORT", "MOVIE", "ONA", "OVA", "SPECIAL"]);
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 50;
 
 export default async function AnimePage(props: PageProps<"/anime">) {
   const sp = await props.searchParams;

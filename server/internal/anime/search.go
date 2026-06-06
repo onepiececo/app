@@ -6,11 +6,13 @@ import (
 )
 
 type Hit struct {
-	ID    int64   `json:"id"`
-	Slug  string  `json:"slug"`
-	Title string  `json:"title"`
-	Year  *int    `json:"year,omitempty"`
-	Score float32 `json:"score,omitempty"`
+	ID             int64   `json:"id"`
+	Slug           string  `json:"slug"`
+	Title          string  `json:"title"`
+	Year           *int    `json:"year,omitempty"`
+	Score          float32 `json:"score,omitempty"`
+	CoverSourceURL *string `json:"coverSourceUrl,omitempty"`
+	CoverColor     *string `json:"coverColor,omitempty"`
 }
 
 // Search runs a layered match against the alias table backed by a pg_trgm GIN index.
@@ -48,10 +50,11 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 				WHERE aa.normalized_alias = $1
 				   OR aa.normalized_alias LIKE $1 || '%'
 			)
-			SELECT id, slug, title_primary, season_year, rank
-			FROM matched
-			WHERE rn = 1
-			ORDER BY rank DESC, popularity DESC
+			SELECT m.id, m.slug, m.title_primary, m.season_year, m.rank, a.cover_source_url, a.cover_color
+			FROM matched m
+			JOIN anime a ON a.id = m.id
+			WHERE m.rn = 1
+			ORDER BY m.rank DESC, m.popularity DESC
 			LIMIT $2
 		`
 	} else {
@@ -75,10 +78,11 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 				   OR aa.normalized_alias LIKE $1 || '%'
 				   OR aa.normalized_alias = $1
 			)
-			SELECT id, slug, title_primary, season_year, rank
-			FROM matched
-			WHERE rn = 1 AND rank >= 0.45
-			ORDER BY rank DESC, popularity DESC
+			SELECT m.id, m.slug, m.title_primary, m.season_year, m.rank, a.cover_source_url, a.cover_color
+			FROM matched m
+			JOIN anime a ON a.id = m.id
+			WHERE m.rn = 1 AND m.rank >= 0.45
+			ORDER BY m.rank DESC, m.popularity DESC
 			LIMIT $2
 		`
 	}
@@ -93,7 +97,7 @@ func (s *Store) Search(ctx context.Context, q string, limit int) ([]Hit, error) 
 	for rows.Next() {
 		var h Hit
 		var rank float32
-		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &rank); err != nil {
+		if err := rows.Scan(&h.ID, &h.Slug, &h.Title, &h.Year, &rank, &h.CoverSourceURL, &h.CoverColor); err != nil {
 			return nil, err
 		}
 		h.Score = rank
