@@ -44,8 +44,9 @@ func (h *AnimeHandler) Browse(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	sort := r.URL.Query().Get("sort")
+	format := r.URL.Query().Get("format")
 
-	hits, err := h.store.Browse(r.Context(), sort, limit, offset)
+	hits, err := h.store.Browse(r.Context(), sort, format, limit, offset)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "browse_failed", Message: err.Error()})
 		return

@@ -8,6 +8,7 @@ export const metadata = {
 };
 
 const VALID_SORTS = new Set<AnimeSort>(["title", "popularity", "year", "score"]);
+const VALID_FORMATS = new Set(["all", "TV", "TV_SHORT", "MOVIE", "ONA", "OVA", "SPECIAL"]);
 const PAGE_SIZE = 30;
 
 export default async function AnimePage(props: PageProps<"/anime">) {
@@ -17,24 +18,27 @@ export default async function AnimePage(props: PageProps<"/anime">) {
   const sort: AnimeSort = VALID_SORTS.has(rawSort as AnimeSort)
     ? (rawSort as AnimeSort)
     : "title";
+  const rawFormat = typeof sp.format === "string" ? sp.format : "all";
+  const format = VALID_FORMATS.has(rawFormat) ? rawFormat : "all";
   const [anime, total] = await Promise.all([
-    q.length > 0 ? searchAnime(q, 50) : browseAnime(sort, PAGE_SIZE),
+    q.length > 0 ? searchAnime(q, 50) : browseAnime(sort, PAGE_SIZE, 0, format),
     getAnimeCount(),
   ]);
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
-      <AnimeHeader currentQuery={q} currentSort={sort} total={total} />
+    <>
+      <AnimeHeader currentQuery={q} currentSort={sort} currentFormat={format} total={total} />
       {q.length > 0 ? (
         <AnimeGrid anime={anime} query={q} />
       ) : (
         <AnimeBrowser
           initialAnime={anime}
           sort={sort}
+          format={format}
           total={total}
           pageSize={PAGE_SIZE}
         />
       )}
-    </main>
+    </>
   );
 }

@@ -27,9 +27,20 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// Browse returns anime sorted by the requested column, paginated.
-// Sort is whitelisted server-side so the value is safe to interpolate.
-func (s *Store) Browse(ctx context.Context, sort string, limit, offset int) ([]Hit, error) {
+// validFormats restricts the format filter to values the catalog actually carries.
+var validFormats = map[string]bool{
+	"TV":       true,
+	"TV_SHORT": true,
+	"MOVIE":    true,
+	"ONA":      true,
+	"OVA":      true,
+	"SPECIAL":  true,
+}
+
+// Browse returns anime sorted by the requested column, paginated, optionally
+// filtered by format. Sort and format are whitelisted server-side so the
+// values are safe to interpolate.
+func (s *Store) Browse(ctx context.Context, sort, format string, limit, offset int) ([]Hit, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -48,15 +59,22 @@ func (s *Store) Browse(ctx context.Context, sort string, limit, offset int) ([]H
 		orderBy = "title_primary ASC NULLS LAST"
 	}
 
+	formatClause := ""
+	args := []any{limit, offset}
+	if validFormats[format] {
+		formatClause = " AND format = $3"
+		args = append(args, format)
+	}
+
 	q := fmt.Sprintf(`
 		SELECT id, slug, COALESCE(title_primary, ''), season_year, COALESCE(average_score, 0)
 		FROM anime
-		WHERE is_adult = false AND title_primary IS NOT NULL
+		WHERE is_adult = false AND title_primary IS NOT NULL%s
 		ORDER BY %s
 		LIMIT $1 OFFSET $2
-	`, orderBy)
+	`, formatClause, orderBy)
 
-	rows, err := s.pool.Query(ctx, q, limit, offset)
+	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

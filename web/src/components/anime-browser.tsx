@@ -8,6 +8,7 @@ import { AnimeGrid } from "@/components/anime-grid";
 export type AnimeBrowserProps = {
   initialAnime: AnimeHit[];
   sort: AnimeSort;
+  format: string;
   total: number;
   pageSize: number;
 };
@@ -18,22 +19,24 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
   const [exhausted, setExhausted] = useState(props.initialAnime.length >= props.total);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const sortRef = useRef(props.sort);
+  const formatRef = useRef(props.format);
 
   // Reads from inside the observer callback so it stays mounted across fetches.
   const stateRef = useRef({ loading, exhausted });
   stateRef.current = { loading, exhausted };
 
-  // Tags each fetch so a stale resolution from a prior sort bails out.
+  // Tags each fetch so a stale resolution from a prior sort or format bails out.
   const tokenRef = useRef(0);
 
   useEffect(() => {
-    if (sortRef.current === props.sort) return;
+    if (sortRef.current === props.sort && formatRef.current === props.format) return;
     sortRef.current = props.sort;
+    formatRef.current = props.format;
     tokenRef.current++;
     setItems(props.initialAnime);
     setExhausted(props.initialAnime.length >= props.total);
     setLoading(false);
-  }, [props.sort, props.initialAnime, props.total]);
+  }, [props.sort, props.format, props.initialAnime, props.total]);
 
   useEffect(() => {
     const node = sentinelRef.current;
@@ -45,7 +48,7 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
         if (live.loading || live.exhausted) return;
         const token = ++tokenRef.current;
         setLoading(true);
-        browseAnime(props.sort, props.pageSize, items.length)
+        browseAnime(props.sort, props.pageSize, items.length, props.format)
           .then((next) => {
             if (token !== tokenRef.current) return;
             if (next.length === 0) {
@@ -67,7 +70,7 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [items.length, props.sort, props.pageSize, props.total]);
+  }, [items.length, props.sort, props.format, props.pageSize, props.total]);
 
   return (
     <>
@@ -75,15 +78,11 @@ export const AnimeBrowser = (props: AnimeBrowserProps) => {
       {!exhausted ? (
         <div
           ref={sentinelRef}
-          className="flex items-center justify-center px-6 py-8 text-muted-foreground text-sm"
+          className="flex items-center justify-center py-8 text-muted-foreground text-sm"
         >
           {loading ? <Loader2 className="size-5 animate-spin" /> : null}
         </div>
-      ) : (
-        <div className="px-6 py-8 text-center text-muted-foreground text-xs">
-          End of catalog
-        </div>
-      )}
+      ) : null}
     </>
   );
 };
