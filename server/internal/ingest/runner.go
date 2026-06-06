@@ -5,11 +5,20 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kgrahammatzen/onepiece-server/internal/anime"
 )
+
+// ingestWorkers caps concurrent record upserts per page so a page pipelines through several connections at once.
+const ingestWorkers = 5
+
+// upsertMaxAttempts retries an upsert that loses a deadlock against a record sharing a studio, genre, or tag row.
+const upsertMaxAttempts = 4
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
@@ -80,24 +89,27 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		}
 		fetchElapsed := time.Since(fetchStart).Round(time.Millisecond)
 
+		var pageUp atomic.Int64
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, ingestWorkers)
+	dispatch:
 		for _, m := range res.Items {
-			sourceID := itoa(m.ID)
-			if _, err := SavePayload(ctx, pool, "anilist", sourceID, m); err != nil {
-				logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
-				continue
+			select {
+			case <-ctx.Done():
+				break dispatch
+			case sem <- struct{}{}:
 			}
-			u := toUpsert(m)
-			animeID, err := store.Upsert(ctx, u)
-			if err != nil {
-				logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
-				continue
-			}
-			if err := MapExternalID(ctx, pool, "anilist", sourceID, animeID); err != nil {
-				logger.Warn("map external id failed", "anilist_id", m.ID, "error", err)
-				continue
-			}
-			upserted++
+			wg.Add(1)
+			go func(m anilistMedia) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				if processItem(ctx, pool, store, logger, m) {
+					pageUp.Add(1)
+				}
+			}(m)
 		}
+		wg.Wait()
+		upserted += int(pageUp.Load())
 
 		pagesDone++
 		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
@@ -115,5 +127,54 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 
 	logger.Info("anilist ingest finished", "pages", pagesDone, "upserted", upserted)
 	return nil
+}
+
+// processItem saves the raw payload, upserts the anime, and links its external id. Returns whether the anime was written.
+func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, m anilistMedia) bool {
+	sourceID := itoa(m.ID)
+	if _, err := SavePayload(ctx, pool, "anilist", sourceID, m); err != nil {
+		logger.Warn("save payload failed", "anilist_id", m.ID, "error", err)
+		return false
+	}
+	u := toUpsert(m)
+	animeID, err := upsertWithRetry(ctx, store, u)
+	if err != nil {
+		logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
+		return false
+	}
+	if err := MapExternalID(ctx, pool, "anilist", sourceID, animeID); err != nil {
+		logger.Warn("map external id failed", "anilist_id", m.ID, "error", err)
+		return false
+	}
+	return true
+}
+
+func upsertWithRetry(ctx context.Context, store *anime.Store, u *anime.AnimeUpsert) (int64, error) {
+	var lastErr error
+	for attempt := range upsertMaxAttempts {
+		id, err := store.Upsert(ctx, u)
+		if err == nil {
+			return id, nil
+		}
+		if !isSerializationConflict(err) {
+			return 0, err
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * 10 * time.Millisecond):
+		}
+	}
+	return 0, lastErr
+}
+
+// isSerializationConflict reports a Postgres deadlock or serialization failure, both safe to retry on a fresh transaction.
+func isSerializationConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "40P01" || pgErr.Code == "40001"
+	}
+	return false
 }
 

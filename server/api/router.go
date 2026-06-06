@@ -63,8 +63,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	return middleware.RequestID(
 		middleware.Logging(cfg.Logger)(
-			middleware.CORS(cfg.WebURL)(
-				middleware.Gzip(mux),
+			middleware.Timeout(
+				middleware.CORS(cfg.WebURL)(
+					middleware.Gzip(mux),
+				),
 			),
 		),
 	)
