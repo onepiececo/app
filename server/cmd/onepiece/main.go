@@ -10,18 +10,25 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/joho/godotenv/autoload"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
+	"github.com/kylegrahammatzen/winter"
 	"github.com/lmittmann/tint"
 
 	"github.com/kgrahammatzen/onepiece-server/api"
 	"github.com/kgrahammatzen/onepiece-server/config"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
 	"github.com/kgrahammatzen/onepiece-server/internal/games"
+	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
 
 func main() {
 	startup := time.Now()
+
+	// .env.local overrides .env for local testing, both are optional.
+	_ = godotenv.Load(".env.local")
+	_ = godotenv.Load(".env")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -59,11 +66,7 @@ func main() {
 		wordleEngine.GameID(): wordleEngine,
 	}
 
-	games.StartScheduler(ctx, pool, logger, games.SchedulerOptions{
-		Interval:     time.Hour,
-		BackfillDays: cfg.PuzzleBackfillDays,
-		Engines:      []games.GameEngine{clueEngine, wordleEngine},
-	})
+	startWinter(ctx, cfg, pool, logger, []games.GameEngine{clueEngine, wordleEngine})
 
 	router := api.NewRouter(api.RouterConfig{
 		Pool:    pool,
@@ -103,6 +106,77 @@ func main() {
 		logger.Error("server error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// startWinter brings up one Redis backed Winter server that owns puzzle generation and, when enabled, ingestion.
+// Redis being unavailable disables background jobs but never takes the API down.
+func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, logger *slog.Logger, engines []games.GameEngine) {
+	redisCfg := winter.RedisConfig{Addr: cfg.RedisAddr}
+
+	client, err := winter.NewClient(redisCfg)
+	if err != nil {
+		logger.Error("redis unavailable, background jobs disabled", "error", err)
+		return
+	}
+
+	puzzleOpts := games.PuzzleWinterOptions{
+		Cron:         cfg.PuzzleCron,
+		BackfillDays: cfg.PuzzleBackfillDays,
+		Engines:      engines,
+	}
+	ingestOpts := ingest.WinterOptions{
+		CrawlEnabled:       cfg.AniListCrawlEnabled,
+		JikanEnabled:       cfg.JikanEnabled,
+		AniListCron:        cfg.AniListCron,
+		AniListPages:       cfg.AniListPages,
+		AniListRPM:         cfg.AniListRPM,
+		AniListRelationIDs: cfg.AniListRelationIDs,
+		JikanCron:          cfg.JikanCron,
+		JikanBatch:         cfg.JikanBatch,
+		JikanRPM:           cfg.JikanRPM,
+		JikanPerSecond:     cfg.JikanPerSecond,
+	}
+
+	cron := games.WinterCron(puzzleOpts)
+	queues := []any{"puzzle", 2}
+	if cfg.IngestEmbedded {
+		cron = append(cron, ingest.WinterCron(ingestOpts)...)
+		queues = append(queues, "anilist", 3, "jikan", 1)
+	}
+
+	server, err := winter.NewServer(redisCfg, winter.ServerConfig{
+		Concurrency: cfg.IngestConcurrency,
+		Logger:      newLogger("warn", cfg.LogFormat),
+		Queues:      winter.Queues(queues...),
+		Cron:        cron,
+	})
+	if err != nil {
+		logger.Error("failed to start winter server", "error", err)
+		_ = client.Close()
+		return
+	}
+
+	games.RegisterWinter(ctx, server, client, pool, logger, puzzleOpts)
+	if cfg.IngestEmbedded {
+		ingest.RegisterWinter(ctx, server, client, pool, logger, ingestOpts)
+	}
+	server.Use(winter.Recover())
+	server.OnDead(func(_ context.Context, ev winter.JobEvent) {
+		logger.Error("background job dead", "kind", ev.Kind, "job_id", ev.ID, "error", ev.Err)
+	})
+
+	go func() {
+		if err := server.Start(); err != nil {
+			logger.Error("winter server stopped", "error", err)
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		server.Stop()
+		_ = client.Close()
+	}()
+
+	logger.Info("winter started", "redis", cfg.RedisAddr, "puzzle_cron", cfg.PuzzleCron, "ingest_embedded", cfg.IngestEmbedded)
 }
 
 func newLogger(level, format string) *slog.Logger {
