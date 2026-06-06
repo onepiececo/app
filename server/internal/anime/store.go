@@ -3,6 +3,7 @@ package anime
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -121,8 +122,7 @@ type RelationUpsert struct {
 	RelationType string
 }
 
-// Upsert writes anime plus child rows in a transaction. Returns the anime id.
-// Slug is the lookup key, callers must ensure it is stable across re-ingestion of the same upstream record.
+// Upsert writes anime plus child rows in a transaction, keyed on the slug which callers must keep stable across re-ingestion of the same record.
 func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -186,6 +186,8 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 		return 0, fmt.Errorf("upsert aliases: %w", err)
 	}
 
+	// Upsert the shared parent rows in a deterministic order so concurrent ingest transactions lock genre, studio, tag, and chara rows the same way and do not deadlock.
+	sort.Strings(u.Genres)
 	genreBatch := &pgx.Batch{}
 	for _, name := range u.Genres {
 		if name == "" {
@@ -206,6 +208,7 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 		return 0, fmt.Errorf("upsert genres: %w", err)
 	}
 
+	sort.Slice(u.Studios, func(i, j int) bool { return Normalize(u.Studios[i].Name) < Normalize(u.Studios[j].Name) })
 	studioBatch := &pgx.Batch{}
 	for _, st := range u.Studios {
 		if st.Name == "" {
@@ -230,6 +233,7 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 		return 0, fmt.Errorf("upsert studios: %w", err)
 	}
 
+	sort.Slice(u.Tags, func(i, j int) bool { return Normalize(u.Tags[i].Name) < Normalize(u.Tags[j].Name) })
 	tagBatch := &pgx.Batch{}
 	for _, t := range u.Tags {
 		if t.Name == "" {
@@ -268,6 +272,12 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 		return 0, fmt.Errorf("insert relations: %w", err)
 	}
 
+	sort.Slice(u.Characters, func(i, j int) bool {
+		if u.Characters[i].Source != u.Characters[j].Source {
+			return u.Characters[i].Source < u.Characters[j].Source
+		}
+		return u.Characters[i].SourceID < u.Characters[j].SourceID
+	})
 	charaBatch := &pgx.Batch{}
 	for _, c := range u.Characters {
 		if c.NameFull == "" || c.SourceID == "" {
@@ -361,10 +371,6 @@ func (s *Store) ApplyAliasOverrides(ctx context.Context) error {
 
 func (s *Store) GetBySlug(ctx context.Context, slug string) (*Anime, error) {
 	return s.scanOne(ctx, `WHERE slug = $1`, slug)
-}
-
-func (s *Store) GetByID(ctx context.Context, id int64) (*Anime, error) {
-	return s.scanOne(ctx, `WHERE id = $1`, id)
 }
 
 func (s *Store) scanOne(ctx context.Context, where string, args ...any) (*Anime, error) {
