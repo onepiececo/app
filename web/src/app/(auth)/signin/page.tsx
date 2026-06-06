@@ -4,6 +4,6 @@ export const metadata = {
   title: "Sign in | onepiece",
 };
 
-export default function AuthPage() {
-  return <AuthCard />;
+export default function SignInPage() {
+  return <AuthCard initialTab="signin" />;
 }

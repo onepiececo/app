@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,21 @@ import { signIn, signUp } from "@/lib/auth-client";
 
 type TabValue = "signin" | "signup";
 
-export const AuthCard = () => {
+export type AuthCardProps = {
+  initialTab?: TabValue;
+};
+
+export const AuthCard = (props: AuthCardProps) => {
   const router = useRouter();
-  const [tab, setTab] = useState<TabValue>("signin");
+  const [tab, setTab] = useState<TabValue>(props.initialTab ?? "signin");
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const switchTab = (value: TabValue) => {
+    setTab(value);
+    setFormError(null);
+    router.replace(value === "signin" ? "/signin" : "/signup", { scroll: false });
+  };
 
   const onSignIn = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,9 +66,13 @@ export const AuthCard = () => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <div className="grid size-10 place-items-center rounded-lg bg-foreground font-bold font-mono text-background text-sm tracking-tighter">
+        <Link
+          href="/"
+          aria-label="Back to home"
+          className="grid size-10 place-items-center rounded-lg bg-foreground font-bold font-mono text-background text-sm tracking-tighter outline-none transition-opacity hover:opacity-90 focus-visible:opacity-90"
+        >
           OP
-        </div>
+        </Link>
         <h1 className="font-semibold text-2xl tracking-tight">
           {tab === "signin" ? "Welcome back" : "Create your account"}
         </h1>
@@ -68,7 +83,7 @@ export const AuthCard = () => {
         </p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => { setTab(v as TabValue); setFormError(null); }}>
+      <Tabs value={tab} onValueChange={(v) => switchTab(v as TabValue)}>
         <TabsList variant="inset" fullWidth>
           <TabsTab value="signin" className="flex-1">Sign in</TabsTab>
           <TabsTab value="signup" className="flex-1">Create account</TabsTab>

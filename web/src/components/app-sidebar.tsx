@@ -68,9 +68,13 @@ const Header = (props: { collapsed: boolean; onToggle: () => void }) => {
   }
   return (
     <div className="flex h-8 w-full items-center justify-between px-1">
-      <span className="grid size-6 place-items-center rounded bg-foreground font-bold font-mono text-[10px] text-background tracking-tighter">
+      <Link
+        href="/"
+        aria-label="Back to home"
+        className="grid size-6 place-items-center rounded bg-foreground font-bold font-mono text-[10px] text-background tracking-tighter outline-none transition-opacity hover:opacity-90 focus-visible:opacity-90"
+      >
         OP
-      </span>
+      </Link>
       <button
         type="button"
         onClick={props.onToggle}
@@ -158,7 +162,7 @@ const ACCOUNT_BUTTON_CLASS = cn(
 const Account = (props: { user?: AppSidebarUser }) => {
   if (!props.user) {
     return (
-      <Link href="/auth" prefetch aria-label="Sign in" className={ACCOUNT_BUTTON_CLASS}>
+      <Link href="/signin" prefetch aria-label="Sign in" className={ACCOUNT_BUTTON_CLASS}>
         <HelpCircle aria-hidden className="size-4 shrink-0 opacity-80" />
         <div className="flex min-w-0 flex-1 flex-col leading-tight">
           <span className="truncate font-medium text-foreground text-xs">Guest</span>

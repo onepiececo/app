@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { type ReactNode } from "react";
 
 // Two-column auth shell, the form lives on the left, a decorative panel
@@ -24,9 +25,13 @@ const BrandPanel = () => (
     }}
   >
     <div className="relative flex h-full flex-col justify-between p-10">
-      <div className="grid size-10 place-items-center rounded-lg bg-foreground font-bold font-mono text-background text-sm tracking-tighter">
+      <Link
+        href="/"
+        aria-label="Back to home"
+        className="grid size-10 place-items-center rounded-lg bg-foreground font-bold font-mono text-background text-sm tracking-tighter outline-none transition-opacity hover:opacity-90 focus-visible:opacity-90"
+      >
         OP
-      </div>
+      </Link>
       <div className="flex flex-col gap-2">
         <h2 className="font-semibold text-foreground text-2xl tracking-tight">
           Daily anime puzzles, no spoilers, no clips.
