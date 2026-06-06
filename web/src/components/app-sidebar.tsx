@@ -1,15 +1,17 @@
 "use client";
 
-import { HelpCircle, Home, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
+import { HelpCircle, Home, Library, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AnimateDigits } from "@/components/animate-number";
 import { AnimateText } from "@/components/animate-text";
 import { useDay } from "@/components/day-provider";
+import { useTheme } from "@/components/theme-provider";
 import { Calendar } from "@/components/ui/calendar";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@/components/ui/popover";
+import { useMounted } from "@/hooks/use-mounted";
 import { useThrottledValue } from "@/hooks/use-throttled-value";
 import { SELECTED_DAY_CLASS, toIso } from "@/lib/days";
 import { cn } from "@/lib/utils";
@@ -159,6 +161,26 @@ const ACCOUNT_BUTTON_CLASS = cn(
   "in-data-[collapsed=true]:size-8!",
 );
 
+const ThemeRow = () => {
+  const mounted = useMounted();
+  const { theme, setTheme } = useTheme();
+  const dark = mounted && theme === "dark";
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      className={cn(
+        "flex h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md p-2 font-medium text-foreground/80 text-sm transition-[width,background-color,color] duration-300 ease-out hover:bg-accent/40 hover:text-foreground",
+        "in-data-[collapsed=true]:size-8!",
+      )}
+    >
+      {dark ? <Sun className="size-4 shrink-0 opacity-80" /> : <Moon className="size-4 shrink-0 opacity-80" />}
+      <span className="truncate">{dark ? "Light mode" : "Dark mode"}</span>
+    </button>
+  );
+};
+
 const Account = (props: { user?: AppSidebarUser }) => {
   if (!props.user) {
     return (
@@ -230,7 +252,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
         ))}
       </nav>
       <DateButton />
-      <div className="mt-auto w-full">
+      <div className="mt-auto flex w-full flex-col gap-1">
+        <ThemeRow />
         <Account user={props.user} />
       </div>
     </aside>
