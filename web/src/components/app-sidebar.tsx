@@ -1,6 +1,6 @@
 "use client";
 
-import { HelpCircle, Home, KeyRound, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle, UserRoundPlus } from "lucide-react";
+import { HelpCircle, Home, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -150,69 +150,55 @@ const DateButton = () => {
   );
 };
 
+const ACCOUNT_BUTTON_CLASS = cn(
+  "flex h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md p-2 text-left outline-none transition-[width,background-color] duration-300 ease-out hover:bg-accent/40",
+  "in-data-[collapsed=true]:size-8!",
+);
+
 const Account = (props: { user?: AppSidebarUser }) => {
-  const signedIn = !!props.user;
+  if (!props.user) {
+    return (
+      <Link href="/auth" prefetch aria-label="Sign in" className={ACCOUNT_BUTTON_CLASS}>
+        <HelpCircle aria-hidden className="size-4 shrink-0 opacity-80" />
+        <div className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="truncate font-medium text-foreground text-xs">Guest</span>
+          <span className="truncate text-[11px] text-muted-foreground">Sign in to sync</span>
+        </div>
+      </Link>
+    );
+  }
+  const user = props.user;
   return (
     <Menu>
       <MenuTrigger
         openOnHover
         delay={120}
         render={
-          <button
-            type="button"
-            aria-label={signedIn ? props.user!.name : "Account"}
-            className={cn(
-              "flex h-8 w-full cursor-pointer items-center gap-2 overflow-hidden rounded-md p-2 text-left outline-none transition-[width,background-color] duration-300 ease-out hover:bg-accent/40",
-              "in-data-[collapsed=true]:size-8!",
-            )}
-          >
-            {signedIn ? (
-              <span className="grid size-4 shrink-0 place-items-center rounded-sm bg-foreground/15 font-bold text-[9px] text-foreground tabular-nums">
-                {props.user!.name.slice(0, 1).toUpperCase()}
-              </span>
-            ) : (
-              <HelpCircle aria-hidden className="size-4 shrink-0 opacity-80" />
-            )}
+          <button type="button" aria-label={user.name} className={ACCOUNT_BUTTON_CLASS}>
+            <span className="grid size-4 shrink-0 place-items-center rounded-sm bg-foreground/15 font-bold text-[9px] text-foreground tabular-nums">
+              {user.name.slice(0, 1).toUpperCase()}
+            </span>
             <div className="flex min-w-0 flex-1 flex-col leading-tight">
-              <span className="truncate font-medium text-foreground text-xs">
-                {signedIn ? props.user!.name : "Guest"}
-              </span>
-              <span className="truncate text-[11px] text-muted-foreground">
-                {signedIn ? props.user!.email ?? "Signed in" : "Sign in to sync"}
-              </span>
+              <span className="truncate font-medium text-foreground text-xs">{user.name}</span>
+              <span className="truncate text-[11px] text-muted-foreground">{user.email ?? "Signed in"}</span>
             </div>
           </button>
         }
       />
       <MenuPopup side="top" align="start" sideOffset={6} className="min-w-(--anchor-width)">
-        {signedIn ? (
-          <>
-            <MenuItem>
-              <UserCircle aria-hidden className="text-sky-500" />
-              Profile
-            </MenuItem>
-            <MenuItem>
-              <Settings aria-hidden className="text-muted-foreground" />
-              Settings
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem variant="destructive">
-              <LogOut aria-hidden />
-              Sign out
-            </MenuItem>
-          </>
-        ) : (
-          <>
-            <MenuItem>
-              <KeyRound aria-hidden className="text-emerald-500" />
-              Sign in
-            </MenuItem>
-            <MenuItem>
-              <UserRoundPlus aria-hidden className="text-sky-500" />
-              Create account
-            </MenuItem>
-          </>
-        )}
+        <MenuItem>
+          <UserCircle aria-hidden className="text-sky-500" />
+          Profile
+        </MenuItem>
+        <MenuItem>
+          <Settings aria-hidden className="text-muted-foreground" />
+          Settings
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem variant="destructive">
+          <LogOut aria-hidden />
+          Sign out
+        </MenuItem>
       </MenuPopup>
     </Menu>
   );
