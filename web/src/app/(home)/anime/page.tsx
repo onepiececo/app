@@ -4,7 +4,7 @@ import { AnimeGrid } from "@/components/anime-grid";
 import { AnimeHeader } from "@/components/anime-header";
 
 export const metadata = {
-  title: "Anime Database — onepiece",
+  title: "Anime Database | onepiece",
 };
 
 const VALID_SORTS = new Set<AnimeSort>(["title", "popularity", "year", "score"]);

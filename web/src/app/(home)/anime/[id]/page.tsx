@@ -17,7 +17,7 @@ export async function generateMetadata(props: AnimeDetailProps) {
   const { id } = await props.params;
   const anime = await getAnimeById(Number(id));
   return {
-    title: anime ? `${anime.titlePrimary} — onepiece` : "Anime — onepiece",
+    title: anime ? `${anime.titlePrimary} | onepiece` : "Anime | onepiece",
   };
 }
 
@@ -98,13 +98,13 @@ const Banner = (props: { url?: string; color?: string }) => {
   if (!props.url) {
     return (
       <div
-        className="-mx-10 -mt-13 h-40 sm:h-56 lg:h-64 xl:-mx-16 xl:-mt-19"
+        className="h-40 rounded-lg sm:h-56 lg:h-64"
         style={{ background: props.color ? `${props.color}33` : undefined }}
       />
     );
   }
   return (
-    <div className="-mx-10 -mt-13 relative h-40 overflow-hidden sm:h-56 lg:h-64 xl:-mx-16 xl:-mt-19">
+    <div className="relative h-40 overflow-hidden rounded-lg sm:h-56 lg:h-64">
       <Image src={props.url} alt="" fill sizes="100vw" className="object-cover" priority />
       <div className="absolute inset-0" style={{ background: fade }} />
     </div>

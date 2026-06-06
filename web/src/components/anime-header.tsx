@@ -70,8 +70,8 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-baseline gap-3">
-        <h1 className="font-semibold text-2xl text-foreground tracking-tight">Anime Database</h1>
+      <div className="flex h-8 items-center gap-3">
+        <h1 className="font-semibold text-2xl text-foreground leading-none tracking-tight">Anime Database</h1>
         <span className="text-muted-foreground text-sm tabular-nums">{props.total.toLocaleString()}</span>
       </div>
       <InputGroup className="bg-background! w-full max-w-md dark:bg-[color-mix(in_srgb,var(--foreground)_2%,var(--background))]!">
