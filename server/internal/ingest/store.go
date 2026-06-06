@@ -167,3 +167,15 @@ func MissingRelationIDs(ctx context.Context, pool *pgxpool.Pool, limit int) ([]i
 	}
 	return ids, rows.Err()
 }
+
+// DeleteDeadRelations removes relation edges to AniList ids that resolve to nothing or to non-anime media so the backlog can reach zero.
+func DeleteDeadRelations(ctx context.Context, pool *pgxpool.Pool, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := pool.Exec(ctx, `
+		DELETE FROM anime_relation
+		WHERE external_to_source = 'anilist' AND external_to_id = ANY($1)
+	`, ids)
+	return err
+}

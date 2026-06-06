@@ -27,6 +27,7 @@ func (e RateLimitError) Error() string {
 const anilistMediaFields = `
   id
   idMal
+  type
   title {
     romaji
     english
@@ -68,7 +69,7 @@ const anilistMediaFields = `
   relations {
     edges {
       relationType
-      node { id idMal }
+      node { id idMal type }
     }
   }
   characters(perPage: 20, sort: [ROLE, RELEVANCE]) {
@@ -128,8 +129,9 @@ type anilistResponse struct {
 }
 
 type anilistMedia struct {
-	ID    int  `json:"id"`
-	IDMal *int `json:"idMal"`
+	ID    int     `json:"id"`
+	IDMal *int    `json:"idMal"`
+	Type  *string `json:"type"`
 	Title struct {
 		Romaji        *string `json:"romaji"`
 		English       *string `json:"english"`
@@ -175,8 +177,9 @@ type anilistMedia struct {
 		Edges []struct {
 			RelationType string `json:"relationType"`
 			Node         struct {
-				ID    int  `json:"id"`
-				IDMal *int `json:"idMal"`
+				ID    int     `json:"id"`
+				IDMal *int    `json:"idMal"`
+				Type  *string `json:"type"`
 			} `json:"node"`
 		} `json:"edges"`
 	} `json:"relations"`
@@ -357,6 +360,10 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 
 	for _, edge := range m.Relations.Edges {
 		if edge.RelationType == "" || edge.Node.ID == 0 {
+			continue
+		}
+		// Only anime relations belong in the anime catalog, manga and novel source material are skipped.
+		if edge.Node.Type == nil || *edge.Node.Type != "ANIME" {
 			continue
 		}
 		u.Relations = append(u.Relations, anime.RelationUpsert{

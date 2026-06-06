@@ -250,10 +250,32 @@ func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *sl
 			}
 			return err
 		}
+
+		// Keep only anime, then drop edges to ids AniList did not return or returned as manga or novel so they leave the backlog.
+		returned := make(map[int]bool, len(media))
+		keep := media[:0]
+		var dead []string
+		for _, m := range media {
+			returned[m.ID] = true
+			if m.Type == nil || *m.Type == "ANIME" {
+				keep = append(keep, m)
+			} else {
+				dead = append(dead, strconv.Itoa(m.ID))
+			}
+		}
+		for _, id := range batch {
+			if !returned[id] {
+				dead = append(dead, strconv.Itoa(id))
+			}
+		}
+		if err := DeleteDeadRelations(ctx, pool, dead); err != nil {
+			logger.Warn("anilist relations dead edge cleanup failed", "error", err)
+		}
+
 		processed += len(batch)
-		upserted += upsertMedia(ctx, pool, store, logger, media)
-		_ = run.Bump(ctx, pool, len(media), upserted, map[string]int{"remaining": len(ids) - processed})
-		logger.Debug("anilist relations batch", "found", len(media), "processed", processed, "backlog", len(ids), "total_upserted", upserted)
+		upserted += upsertMedia(ctx, pool, store, logger, keep)
+		_ = run.Bump(ctx, pool, len(keep), upserted, map[string]int{"remaining": len(ids) - processed})
+		logger.Debug("anilist relations batch", "found", len(keep), "dead", len(dead), "processed", processed, "backlog", len(ids), "total_upserted", upserted)
 	}
 
 	logger.Info("anilist relations finished", "upserted", upserted, "attempted", processed)
