@@ -89,27 +89,7 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 		}
 		fetchElapsed := time.Since(fetchStart).Round(time.Millisecond)
 
-		var pageUp atomic.Int64
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, ingestWorkers)
-	dispatch:
-		for _, m := range res.Items {
-			select {
-			case <-ctx.Done():
-				break dispatch
-			case sem <- struct{}{}:
-			}
-			wg.Add(1)
-			go func(m anilistMedia) {
-				defer wg.Done()
-				defer func() { <-sem }()
-				if processItem(ctx, pool, store, logger, m) {
-					pageUp.Add(1)
-				}
-			}(m)
-		}
-		wg.Wait()
-		upserted += int(pageUp.Load())
+		upserted += upsertMedia(ctx, pool, store, logger, res.Items)
 
 		pagesDone++
 		_ = run.Bump(ctx, pool, len(res.Items), upserted, map[string]int{"page": page})
@@ -129,6 +109,31 @@ func RunAniListOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger
 	return nil
 }
 
+// upsertMedia writes a batch of records through a bounded worker pool and returns how many were saved.
+func upsertMedia(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, items []anilistMedia) int {
+	var done atomic.Int64
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, ingestWorkers)
+dispatch:
+	for _, m := range items {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case sem <- struct{}{}:
+		}
+		wg.Add(1)
+		go func(m anilistMedia) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if processItem(ctx, pool, store, logger, m) {
+				done.Add(1)
+			}
+		}(m)
+	}
+	wg.Wait()
+	return int(done.Load())
+}
+
 // processItem saves the raw payload, upserts the anime, and links its external id. Returns whether the anime was written.
 func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, logger *slog.Logger, m anilistMedia) bool {
 	sourceID := itoa(m.ID)
@@ -137,7 +142,7 @@ func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, lo
 		return false
 	}
 	u := toUpsert(m)
-	animeID, err := upsertWithRetry(ctx, store, u)
+	animeID, err := upsertWithRetry(ctx, store, logger, m.ID, u)
 	if err != nil {
 		logger.Warn("anime upsert failed", "anilist_id", m.ID, "title", u.TitlePrimary, "error", err)
 		return false
@@ -149,7 +154,7 @@ func processItem(ctx context.Context, pool *pgxpool.Pool, store *anime.Store, lo
 	return true
 }
 
-func upsertWithRetry(ctx context.Context, store *anime.Store, u *anime.AnimeUpsert) (int64, error) {
+func upsertWithRetry(ctx context.Context, store *anime.Store, logger *slog.Logger, anilistID int, u *anime.AnimeUpsert) (int64, error) {
 	var lastErr error
 	for attempt := range upsertMaxAttempts {
 		id, err := store.Upsert(ctx, u)
@@ -160,6 +165,7 @@ func upsertWithRetry(ctx context.Context, store *anime.Store, u *anime.AnimeUpse
 			return 0, err
 		}
 		lastErr = err
+		logger.Debug("upsert retry on conflict", "anilist_id", anilistID, "attempt", attempt+1, "error", err)
 		select {
 		case <-ctx.Done():
 			return 0, ctx.Err()
@@ -178,3 +184,94 @@ func isSerializationConflict(err error) bool {
 	return false
 }
 
+// AniListRelationOptions controls a relation backfill pass.
+type AniListRelationOptions struct {
+	// MaxIDs caps how many missing related ids to resolve in one pass so a single run stays bounded.
+	MaxIDs int
+	// RPMLimit is requests per minute, the same budget the catalog crawl uses.
+	RPMLimit int
+}
+
+// RunAniListRelationsOnce fetches related anime that existing records reference but the catalog is missing.
+// It runs before the popularity crawl so the relation graph fills in before brand new shows are added.
+func RunAniListRelationsOnce(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger, opts AniListRelationOptions) (runErr error) {
+	if opts.MaxIDs <= 0 {
+		opts.MaxIDs = 100
+	}
+	if opts.RPMLimit <= 0 {
+		opts.RPMLimit = 25
+	}
+
+	ids, err := MissingRelationIDs(ctx, pool, opts.MaxIDs)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		logger.Debug("anilist relations, none missing")
+		return nil
+	}
+
+	run, err := StartRun(ctx, pool, "anilist", "relations")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = run.Finish(ctx, pool, runErr) }()
+
+	client := NewAniListClient()
+	store := anime.NewStore(pool)
+
+	gap := time.Minute / time.Duration(opts.RPMLimit)
+	ticker := time.NewTicker(gap)
+	defer ticker.Stop()
+
+	logger.Info("anilist relations started", "missing", len(ids), "rpm", opts.RPMLimit)
+
+	upserted := 0
+	for _, batch := range chunkInts(ids, 50) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+
+		media, err := fetchByIDsRetry(ctx, client, logger, batch)
+		if err != nil {
+			logger.Error("anilist relations fetch failed", "error", err)
+			return err
+		}
+		upserted += upsertMedia(ctx, pool, store, logger, media)
+		_ = run.Bump(ctx, pool, len(media), upserted, map[string]int{"remaining": len(ids)})
+		logger.Info("anilist relations batch", "ids", len(batch), "found", len(media), "total_upserted", upserted)
+	}
+
+	logger.Info("anilist relations finished", "upserted", upserted)
+	return nil
+}
+
+// fetchByIDsRetry resolves a batch of ids, waiting out a rate limit and retrying the same batch.
+func fetchByIDsRetry(ctx context.Context, client *AniListClient, logger *slog.Logger, ids []int) ([]anilistMedia, error) {
+	for {
+		media, err := client.FetchByIDs(ctx, ids)
+		if err == nil {
+			return media, nil
+		}
+		var rl RateLimitError
+		if !errors.As(err, &rl) {
+			return nil, err
+		}
+		logger.Warn("anilist rate limited", "retry_after", rl.RetryAfter, "job", "relations")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(rl.RetryAfter):
+		}
+	}
+}
+
+func chunkInts(ids []int, size int) [][]int {
+	var out [][]int
+	for i := 0; i < len(ids); i += size {
+		out = append(out, ids[i:min(i+size, len(ids))])
+	}
+	return out
+}

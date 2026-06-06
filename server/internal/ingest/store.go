@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -130,4 +131,35 @@ func AnimeForJikanEnrichment(ctx context.Context, pool *pgxpool.Pool, limit int,
 type JikanCandidate struct {
 	AnimeID int64
 	MalID   int
+}
+
+// MissingRelationIDs returns AniList ids referenced by anime_relation that have no local anime yet,
+// so a backfill pass can fetch the related shows before crawling new ones.
+func MissingRelationIDs(ctx context.Context, pool *pgxpool.Pool, limit int) ([]int, error) {
+	rows, err := pool.Query(ctx, `
+		SELECT DISTINCT ar.external_to_id
+		FROM anime_relation ar
+		WHERE ar.external_to_source = 'anilist'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM source_id_map m
+		    WHERE m.source = 'anilist' AND m.source_id = ar.external_to_id
+		  )
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []int
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		if n, err := strconv.Atoi(raw); err == nil {
+			ids = append(ids, n)
+		}
+	}
+	return ids, rows.Err()
 }

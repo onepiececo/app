@@ -24,6 +24,70 @@ func (e RateLimitError) Error() string {
 	return fmt.Sprintf("rate limited, retry after %s", e.RetryAfter)
 }
 
+const anilistMediaFields = `
+  id
+  idMal
+  title {
+    romaji
+    english
+    native
+    userPreferred
+  }
+  synonyms
+  format
+  status
+  source
+  season
+  seasonYear
+  episodes
+  duration
+  averageScore
+  meanScore
+  popularity
+  favourites
+  isAdult
+  genres
+  tags {
+    id
+    name
+    category
+    rank
+    isGeneralSpoiler
+    isMediaSpoiler
+    isAdult
+  }
+  studios(isMain: true) {
+    edges {
+      isMain
+      node { id name }
+    }
+  }
+  relations {
+    edges {
+      relationType
+      node { id idMal }
+    }
+  }
+  characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
+    edges {
+      role
+      node {
+        id
+        name { full native }
+        image { large }
+        gender
+        age
+      }
+    }
+  }
+  coverImage {
+    extraLarge
+    large
+    color
+  }
+  bannerImage
+`
+
 const anilistQuery = `
 query CatalogPage($page: Int!, $perPage: Int!) {
   Page(page: $page, perPage: $perPage) {
@@ -31,69 +95,16 @@ query CatalogPage($page: Int!, $perPage: Int!) {
       currentPage
       hasNextPage
     }
-    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
-      id
-      idMal
-      title {
-        romaji
-        english
-        native
-        userPreferred
-      }
-      synonyms
-      format
-      status
-      source
-      season
-      seasonYear
-      episodes
-      duration
-      averageScore
-      meanScore
-      popularity
-      favourites
-      isAdult
-      genres
-      tags {
-        id
-        name
-        category
-        rank
-        isGeneralSpoiler
-        isMediaSpoiler
-        isAdult
-      }
-      studios(isMain: true) {
-        edges {
-          isMain
-          node { id name }
-        }
-      }
-      relations {
-        edges {
-          relationType
-          node { id idMal }
-        }
-      }
-      characters(perPage: 10, sort: [ROLE, RELEVANCE]) {
-        edges {
-          role
-          node {
-            id
-            name { full native }
-            image { large }
-            gender
-            age
-          }
-        }
-      }
-      coverImage {
-        extraLarge
-        large
-        color
-      }
-      bannerImage
-    }
+    media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {` + anilistMediaFields + `}
+  }
+}
+`
+
+// anilistByIDsQuery resolves up to 50 specific media by id so we can backfill relations we are missing.
+const anilistByIDsQuery = `
+query MediaByIDs($ids: [Int]) {
+  Page(perPage: 50) {
+    media(id_in: $ids) {` + anilistMediaFields + `}
   }
 }
 `
@@ -201,10 +212,11 @@ func NewAniListClient() *AniListClient {
 	return &AniListClient{HTTP: &http.Client{Timeout: 30 * time.Second}}
 }
 
-func (c *AniListClient) FetchPage(ctx context.Context, page, perPage int) (*AniListPage, error) {
+// do posts one GraphQL query and decodes the shared response shape, surfacing a RateLimitError on 429.
+func (c *AniListClient) do(ctx context.Context, query string, variables map[string]any) (*anilistResponse, error) {
 	body, _ := json.Marshal(map[string]any{
-		"query":     anilistQuery,
-		"variables": map[string]int{"page": page, "perPage": perPage},
+		"query":     query,
+		"variables": variables,
 	})
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anilistEndpoint, bytes.NewReader(body))
@@ -239,11 +251,27 @@ func (c *AniListClient) FetchPage(ctx context.Context, page, perPage int) (*AniL
 	if len(parsed.Errors) > 0 {
 		return nil, fmt.Errorf("anilist graphql error: %s", parsed.Errors[0].Message)
 	}
+	return &parsed, nil
+}
 
+func (c *AniListClient) FetchPage(ctx context.Context, page, perPage int) (*AniListPage, error) {
+	parsed, err := c.do(ctx, anilistQuery, map[string]any{"page": page, "perPage": perPage})
+	if err != nil {
+		return nil, err
+	}
 	return &AniListPage{
 		Items:       parsed.Data.Page.Media,
 		HasNextPage: parsed.Data.Page.PageInfo.HasNextPage,
 	}, nil
+}
+
+// FetchByIDs resolves specific AniList media by id, used to backfill related anime we do not have yet.
+func (c *AniListClient) FetchByIDs(ctx context.Context, ids []int) ([]anilistMedia, error) {
+	parsed, err := c.do(ctx, anilistByIDsQuery, map[string]any{"ids": ids})
+	if err != nil {
+		return nil, err
+	}
+	return parsed.Data.Page.Media, nil
 }
 
 // ToUpsert maps a raw AniList media record into an anime.AnimeUpsert payload.
