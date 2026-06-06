@@ -3,9 +3,9 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"log/slog"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
@@ -13,45 +13,50 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// JWKSStore reads JWKS public keys directly from the shared postgres jwks table
-// (written by Better Auth's jwt plugin) and provides a jwt.Keyfunc for token verification.
+// ErrJWKSNotLoaded is returned by Keyfunc before the first successful key load.
+var ErrJWKSNotLoaded = errors.New("jwks keyfunc not loaded")
+
+// JWKSStore reads JWKS public keys from the shared postgres jwks table written by Better Auth and verifies tokens against them.
 type JWKSStore struct {
 	pool   *pgxpool.Pool
 	logger *slog.Logger
-
-	mu sync.RWMutex
-	kf keyfunc.Keyfunc
+	kf     atomic.Pointer[keyfunc.Keyfunc]
 }
 
 func NewJWKSStore(pool *pgxpool.Pool, logger *slog.Logger) *JWKSStore {
 	return &JWKSStore{pool: pool, logger: logger}
 }
 
-// Load reads public keys from the DB and builds a keyfunc.
-// Must be called before Keyfunc().
+// jwk is the Ed25519 public key shape Better Auth stores plus the JOSE fields we stamp on for verification.
+type jwk struct {
+	Kty string `json:"kty"`
+	Crv string `json:"crv"`
+	X   string `json:"x"`
+	Kid string `json:"kid"`
+	Alg string `json:"alg"`
+	Use string `json:"use"`
+}
+
+// Load rebuilds the keyfunc from the DB and swaps it in only on success so a failed refresh keeps the previous keys.
 func (s *JWKSStore) Load(ctx context.Context) error {
 	kf, err := s.buildKeyfunc(ctx)
 	if err != nil {
 		return err
 	}
-	s.mu.Lock()
-	s.kf = kf
-	s.mu.Unlock()
+	s.kf.Store(&kf)
 	return nil
 }
 
-// Keyfunc returns a jwt.Keyfunc that verifies tokens using the cached public keys.
-func (s *JWKSStore) Keyfunc(token *jwt.Token, claims jwt.Claims) (any, error) {
-	s.mu.RLock()
-	kf := s.kf
-	s.mu.RUnlock()
+// Keyfunc resolves the signing key for a token against the cached public keys.
+func (s *JWKSStore) Keyfunc(token *jwt.Token) (any, error) {
+	kf := s.kf.Load()
 	if kf == nil {
-		return nil, fmt.Errorf("jwks keyfunc is not loaded")
+		return nil, ErrJWKSNotLoaded
 	}
-	return kf.Keyfunc(token)
+	return (*kf).Keyfunc(token)
 }
 
-// StartRefresh re-reads keys from the DB on a timer. Cancel ctx to stop.
+// StartRefresh re-reads keys from the DB on a timer until ctx is cancelled, each refresh bounded by its own timeout so a stalled DB cannot hang the loop.
 func (s *JWKSStore) StartRefresh(ctx context.Context, interval time.Duration) {
 	t := time.NewTicker(interval)
 	defer t.Stop()
@@ -60,7 +65,10 @@ func (s *JWKSStore) StartRefresh(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			if err := s.Load(ctx); err != nil {
+			refreshCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := s.Load(refreshCtx)
+			cancel()
+			if err != nil {
 				s.logger.Warn("jwks refresh failed", "error", err)
 			}
 		}
@@ -82,30 +90,28 @@ func (s *JWKSStore) buildKeyfunc(ctx context.Context) (keyfunc.Keyfunc, error) {
 			return nil, err
 		}
 
-		var jwk map[string]any
-		if err := json.Unmarshal([]byte(pubKey), &jwk); err != nil {
+		var k jwk
+		if err := json.Unmarshal([]byte(pubKey), &k); err != nil {
 			s.logger.Warn("skipping malformed jwk", "id", id, "error", err)
 			continue
 		}
-		jwk["kid"] = id
-		jwk["alg"] = "EdDSA"
-		jwk["use"] = "sig"
+		k.Kid = id
+		k.Alg = "EdDSA"
+		k.Use = "sig"
 
-		raw, _ := json.Marshal(jwk)
+		raw, _ := json.Marshal(k)
 		keys = append(keys, raw)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-
-	jwks := struct {
-		Keys []json.RawMessage `json:"keys"`
-	}{Keys: keys}
-	if jwks.Keys == nil {
-		jwks.Keys = []json.RawMessage{}
+	if len(keys) == 0 {
+		return nil, errors.New("no valid jwks keys found")
 	}
 
-	raw, err := json.Marshal(jwks)
+	raw, err := json.Marshal(struct {
+		Keys []json.RawMessage `json:"keys"`
+	}{Keys: keys})
 	if err != nil {
 		return nil, err
 	}

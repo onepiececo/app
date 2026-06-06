@@ -7,8 +7,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// VerifyBearer parses and validates an `Authorization: Bearer <jwt>` header value.
-// Returns the `sub` claim on success. Empty header returns ErrMissingToken without surfacing an error to logs.
+// Claims is the registered-claims subset we validate and read the subject from.
+type Claims struct {
+	jwt.RegisteredClaims
+}
+
+// VerifyBearer validates an Authorization Bearer JWT and returns its subject, with a missing header yielding ErrMissingToken so it stays out of logs.
 func VerifyBearer(jwks *JWKSStore, header string) (string, error) {
 	scheme, tokenString, ok := strings.Cut(strings.TrimSpace(header), " ")
 	if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tokenString) == "" {
@@ -16,21 +20,16 @@ func VerifyBearer(jwks *JWKSStore, header string) (string, error) {
 	}
 	tokenString = strings.TrimSpace(tokenString)
 
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {
-		return jwks.Keyfunc(t, t.Claims)
-	})
+	var claims Claims
+	token, err := jwt.ParseWithClaims(tokenString, &claims, jwks.Keyfunc,
+		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}))
 	if err != nil || !token.Valid {
 		return "", ErrInvalidToken
 	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
+	if claims.Subject == "" {
 		return "", ErrInvalidToken
 	}
-	sub, _ := claims["sub"].(string)
-	if sub == "" {
-		return "", ErrInvalidToken
-	}
-	return sub, nil
+	return claims.Subject, nil
 }
 
 var (
