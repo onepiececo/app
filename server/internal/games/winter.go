@@ -68,10 +68,12 @@ func runPuzzleBackfill(ctx context.Context, pool *pgxpool.Pool, logger *slog.Log
 			}
 			if created {
 				generated++
-				logger.Info("puzzle generated", "game", e.GameID(), "date", d.Format("2006-01-02"))
+				logger.Debug("puzzle generated", "game", e.GameID(), "date", d.Format("2006-01-02"))
 			}
 		}
-		if generated == 0 {
+		if generated > 0 {
+			logger.Info("puzzle backfill", "game", e.GameID(), "generated", generated)
+		} else {
 			logger.Debug("puzzle backfill, no gaps", "game", e.GameID(), "backfill_days", backfillDays)
 		}
 	}
