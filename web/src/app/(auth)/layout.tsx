@@ -7,9 +7,8 @@ import { cloudinaryFetch, hasCloudinary } from "@/lib/image";
 // Re-pick the backdrop cover on every visit so the panel never feels static.
 export const dynamic = "force-dynamic";
 
-const HEADLINE = "Guess the anime. No spoilers, no clips, just one a day.";
-const SUBCOPY =
-  "Sign in to keep your streak alive on every device and climb the daily leaderboard.";
+const HEADLINE = "Guess the daily anime, no spoilers and no clips.";
+const SUBCOPY = "Sign in to keep your streak and history synced across every device.";
 
 // Pull a recognizable popular cover at random. Covers are official key art so they never spoil.
 const pickCover = async (): Promise<AnimeHit | null> => {
