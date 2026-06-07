@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode, type RefCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { getAvailableDays } from "@/app/actions/days";
 import { useDayScroll } from "@/hooks/use-day-scroll";
 import { makeDay, safeParseIso, type Day } from "@/lib/days";
@@ -14,7 +14,6 @@ type DayContextValue = {
   scrollToDay: (idx: number) => void;
   pickDay: (iso: string) => void;
   registerScroller: RefCallback<HTMLElement>;
-  registerSection: (idx: number) => RefCallback<HTMLElement>;
   firstDate: Date;
   lastDate: Date;
   calendarStartMonth: Date;
@@ -48,6 +47,9 @@ const writeDateParam = (iso: string) => {
 
 export const DayProvider = (props: DayProviderProps) => {
   const sp = useSearchParams();
+  const pathname = usePathname();
+  // The date only belongs in the url on the home rail, other routes keep the day in memory without leaking the param.
+  const onHome = pathname === "/";
   const dateParam = sp.get("date");
   // The server date list is the single source of truth, newest first, so today is days[0].
   const fallbackIso = props.days[0]?.iso ?? "";
@@ -60,11 +62,11 @@ export const DayProvider = (props: DayProviderProps) => {
   const scroll = useDayScroll({ count: days.length, initialIdx });
 
   useEffect(() => {
-    if (scroll.scrolling) return;
+    if (!onHome || scroll.scrolling) return;
     const activeIso = days[scroll.activeIdx]?.iso;
     if (!activeIso) return;
     writeDateParam(activeIso);
-  }, [scroll.scrolling, scroll.activeIdx, days]);
+  }, [onHome, scroll.scrolling, scroll.activeIdx, days]);
 
   const loadMore = async () => {
     if (loadingMore || exhausted) return;
@@ -94,7 +96,7 @@ export const DayProvider = (props: DayProviderProps) => {
   }, [scroll.activeIdx, days.length, exhausted, loadingMore]);
 
   const pickDay = (iso: string) => {
-    writeDateParam(iso);
+    if (onHome) writeDateParam(iso);
     const idx = days.findIndex((d) => d.iso === iso);
     if (idx >= 0) scroll.scrollToDay(idx);
   };
@@ -112,7 +114,6 @@ export const DayProvider = (props: DayProviderProps) => {
     scrollToDay: scroll.scrollToDay,
     pickDay,
     registerScroller: scroll.registerScroller,
-    registerSection: scroll.registerSection,
     firstDate,
     lastDate,
     calendarStartMonth,

@@ -12,32 +12,25 @@ export type UseDayScrollResult = {
   scrolling: boolean;
   scrollToDay: (idx: number) => void;
   registerScroller: RefCallback<HTMLElement>;
-  registerSection: (idx: number) => RefCallback<HTMLElement>;
 };
 
-// Manages day-based scroll navigation with snap-style wheel/keyboard controls,
-// scroll-driven index tracking, smooth programmatic jumps, and a `scrolling`
-// flag that consumers can use to blur the date while the user is in motion.
+// Drives snap scrolling between days and tracks which one is active while the user moves.
 export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
   const initialIdx = opts.initialIdx ?? 0;
   const [activeIdx, setActiveIdx] = useState(initialIdx);
   const [scrolling, setScrolling] = useState(false);
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
-  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
   const activeIdxRef = useRef(activeIdx);
   activeIdxRef.current = activeIdx;
   const ignoreScrollUntil = useRef(0);
-  const didInitScroll = useRef(false);
   const scrollIdleTimer = useRef<number | null>(null);
   const settleTimer = useRef<number | null>(null);
   const draggingRef = useRef(false);
   const count = opts.count;
-  const countRef = useRef(count);
-  countRef.current = count;
+  // Listeners attach once but reach the latest handlers through this ref so they never capture a stale closure.
+  const handlers = useRef<{ flagScrolling: () => void; scrollToDay: (idx: number) => void }>(undefined!);
 
-  // Mark scrolling=true on every scroll tick, then debounce it back to false
-  // ~150ms after the user stops. Cleared by both real scroll and programmatic
-  // scrollIntoView, which fires scroll events too.
+  // Flag motion on each scroll tick and debounce it off 150ms after the last one so both real and programmatic scrolls settle the same way.
   const flagScrolling = () => {
     setScrolling(true);
     if (scrollIdleTimer.current !== null) {
@@ -58,7 +51,7 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     };
     // Wheel and keyboard updates settle after 60ms so the AnimateDigits spring runs once when the user stops, scrollbar and touch drag bypass the settle so the date flips per day boundary as the user crosses it.
     const onScroll = () => {
-      flagScrolling();
+      handlers.current.flagScrolling();
       if (Date.now() < ignoreScrollUntil.current) return;
       if (draggingRef.current) {
         const idx = computeIdx();
@@ -97,34 +90,25 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     };
   }, [scroller, count]);
 
-  // Restore scroll on every scroller mount, including remounts after navigating
-  // away and back to a route that hosts the scroller. The hook lives in
-  // DayProvider on the (home) layout so activeIdxRef survives across route
-  // changes, the consumer (DayScroller) does not.
+  // Reapply the saved index whenever the scroller mounts since DayScroller remounts across routes while this hook persists in DayProvider.
   useEffect(() => {
-    if (!scroller) {
-      didInitScroll.current = false;
-      return;
-    }
+    if (!scroller) return;
     const target = activeIdxRef.current > 0 ? activeIdxRef.current : initialIdx;
-    if (target <= 0) {
-      didInitScroll.current = true;
-      return;
-    }
+    if (target <= 0) return;
     const h = scroller.clientHeight;
     if (h <= 0) return;
-    didInitScroll.current = true;
     ignoreScrollUntil.current = Date.now() + 900;
     scroller.scrollTop = target * h;
   }, [scroller, initialIdx]);
 
   const scrollToDay = (idx: number) => {
-    const clamped = Math.max(0, Math.min(countRef.current - 1, idx));
+    const clamped = Math.max(0, Math.min(count - 1, idx));
     if (clamped === activeIdxRef.current) return;
     ignoreScrollUntil.current = Date.now() + 900;
     setActiveIdx(clamped);
-    sectionRefs.current[clamped]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scroller?.scrollTo({ top: clamped * scroller.clientHeight, behavior: "smooth" });
   };
+  handlers.current = { flagScrolling, scrollToDay };
 
   useEffect(() => {
     if (!scroller) return;
@@ -135,8 +119,8 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
       const now = Date.now();
       if (now - lastFire < 500) return;
       lastFire = now;
-      flagScrolling();
-      scrollToDay(activeIdxRef.current + (e.deltaY > 0 ? 1 : -1));
+      handlers.current.flagScrolling();
+      handlers.current.scrollToDay(activeIdxRef.current + (e.deltaY > 0 ? 1 : -1));
     };
     scroller.addEventListener("wheel", onWheel, { passive: false });
     return () => scroller.removeEventListener("wheel", onWheel);
@@ -154,21 +138,21 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
         case "PageDown":
         case "j":
           e.preventDefault();
-          scrollToDay(activeIdxRef.current + 1);
+          handlers.current.scrollToDay(activeIdxRef.current + 1);
           break;
         case "ArrowUp":
         case "PageUp":
         case "k":
           e.preventDefault();
-          scrollToDay(activeIdxRef.current - 1);
+          handlers.current.scrollToDay(activeIdxRef.current - 1);
           break;
         case "Home":
           e.preventDefault();
-          scrollToDay(0);
+          handlers.current.scrollToDay(0);
           break;
         case "End":
           e.preventDefault();
-          scrollToDay(count - 1);
+          handlers.current.scrollToDay(count - 1);
           break;
       }
     };
@@ -176,9 +160,5 @@ export const useDayScroll = (opts: UseDayScrollOptions): UseDayScrollResult => {
     return () => window.removeEventListener("keydown", onKey);
   }, [scroller, count]);
 
-  const registerSection = (idx: number): RefCallback<HTMLElement> => (el) => {
-    sectionRefs.current[idx] = el;
-  };
-
-  return { activeIdx, scrolling, scrollToDay, registerScroller: setScroller, registerSection };
+  return { activeIdx, scrolling, scrollToDay, registerScroller: setScroller };
 };

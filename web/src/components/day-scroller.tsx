@@ -15,12 +15,8 @@ export const DayScroller = (props: DayScrollerProps) => {
         ref={day.registerScroller}
         className="hidden min-h-0 flex-1 snap-y snap-mandatory overflow-y-scroll overscroll-y-contain lg:block"
       >
-        {day.days.map((d, i) => (
-          <section
-            key={d.iso}
-            ref={day.registerSection(i)}
-            className="h-full snap-start"
-          >
+        {day.days.map((d) => (
+          <section key={d.iso} className="h-full snap-start">
             {props.children}
           </section>
         ))}

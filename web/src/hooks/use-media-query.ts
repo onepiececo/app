@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 
 const BREAKPOINTS = {
   "2xl": 1536,
@@ -72,21 +72,24 @@ export function useMediaQuery(
   query: BreakpointQuery | MediaQueryInput | (string & {}),
 ): boolean {
   const mediaQuery = parseQuery(query);
+  const cache = useRef<{ q: string; mql: MediaQueryList } | null>(null);
 
-  const subscribe = useCallback(
-    (callback: () => void) => {
-      if (typeof window === "undefined") return () => {};
-      const mql = window.matchMedia(mediaQuery);
-      mql.addEventListener("change", callback);
-      return () => mql.removeEventListener("change", callback);
-    },
-    [mediaQuery],
-  );
+  // Reuse one MediaQueryList per query so getSnapshot stops allocating a fresh matcher on every render.
+  const getMql = () => {
+    if (typeof window === "undefined") return null;
+    if (!cache.current || cache.current.q !== mediaQuery) {
+      cache.current = { q: mediaQuery, mql: window.matchMedia(mediaQuery) };
+    }
+    return cache.current.mql;
+  };
 
-  const getSnapshot = useCallback(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia(mediaQuery).matches;
-  }, [mediaQuery]);
+  const subscribe = (callback: () => void) => {
+    const mql = getMql();
+    if (!mql) return () => {};
+    mql.addEventListener("change", callback);
+    return () => mql.removeEventListener("change", callback);
+  };
+  const getSnapshot = () => getMql()?.matches ?? false;
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
