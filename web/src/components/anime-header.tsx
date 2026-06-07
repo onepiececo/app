@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import type { AnimeSort } from "@/app/actions/anime";
@@ -40,6 +40,8 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
   const [format, setFormat] = useState(props.currentFormat);
   const [, startTransition] = useTransition();
   const debouncedValue = useDebouncedValue(value, 300);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setValue(props.currentQuery);
@@ -66,10 +68,15 @@ export const AnimeHeader = (props: AnimeHeaderProps) => {
     startTransition(() => {
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     });
+    // A new sort or format reshuffles the whole grid so glide back to the top instead of stranding the user mid list.
+    if (sort !== props.currentSort || format !== props.currentFormat) {
+      scrollerRef.current ??= rootRef.current?.closest("main") ?? null;
+      scrollerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }, [debouncedValue, sort, format, props.currentQuery, props.currentSort, props.currentFormat, pathname, router]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={rootRef} className="flex flex-col gap-6">
       <div className="flex h-8 items-center gap-3">
         <h1 className="font-semibold text-2xl text-foreground leading-none tracking-tight">Anime Database</h1>
         <span className="text-muted-foreground text-sm tabular-nums">{props.total.toLocaleString()}</span>
