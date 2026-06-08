@@ -1,0 +1,193 @@
+package handlers
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/kgrahammatzen/onepiece-server/internal/anime"
+	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/games"
+	"github.com/kgrahammatzen/onepiece-server/internal/httpx"
+	"github.com/kgrahammatzen/onepiece-server/internal/player"
+)
+
+type PuzzleHandler struct {
+	store   *games.Store
+	anime   *anime.Store
+	players *player.Store
+	jwks    *auth.JWKSStore
+}
+
+func NewPuzzleHandler(store *games.Store, animeStore *anime.Store, players *player.Store, jwks *auth.JWKSStore) *PuzzleHandler {
+	return &PuzzleHandler{store: store, anime: animeStore, players: players, jwks: jwks}
+}
+
+// resolve maps the request to a player identity, writing the error and returning ok false on failure.
+func (h *PuzzleHandler) resolve(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool, bool) {
+	if bearer := r.Header.Get("Authorization"); bearer != "" {
+		userID, err := auth.VerifyBearer(h.jwks, bearer)
+		if err != nil && !errors.Is(err, auth.ErrMissingToken) {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusUnauthorized, Code: "invalid_token", Message: "invalid bearer"})
+			return uuid.Nil, false, false
+		}
+		if userID != "" {
+			id, err := h.players.ResolveUser(r.Context(), userID)
+			if err != nil {
+				httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
+				return uuid.Nil, false, false
+			}
+			return id.ID, false, true
+		}
+	}
+
+	anonKey := r.Header.Get("X-Anonymous-Key")
+	if anonKey == "" {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusUnauthorized, Code: "missing_identity", Message: "send Authorization Bearer or X-Anonymous-Key"})
+		return uuid.Nil, false, false
+	}
+	id, err := h.players.ResolveAnonymous(r.Context(), player.HashAnonymousKey(anonKey))
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "identity_failed", Message: err.Error()})
+		return uuid.Nil, false, false
+	}
+	return id.ID, true, true
+}
+
+// Today returns the puzzle for a game and date with the player's attempt state, defaulting to today.
+func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
+	game := r.URL.Query().Get("game")
+	if game == "" {
+		game = games.ClueGame
+	}
+	date := time.Now().UTC().Truncate(24 * time.Hour)
+	if v := r.URL.Query().Get("date"); v != "" {
+		d, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_date", Message: "date must be YYYY-MM-DD"})
+			return
+		}
+		date = d
+	}
+
+	playerID, anon, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+
+	puzzle, err := h.store.GetByGameDate(r.Context(), game, date)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
+		return
+	}
+	// Generate today on demand for clue so a fresh server serves it before the cron tick.
+	if puzzle == nil && game == games.ClueGame {
+		if _, err := h.store.EnsureClueForDate(r.Context(), h.anime, date); err != nil {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
+			return
+		}
+		puzzle, err = h.store.GetByGameDate(r.Context(), game, date)
+		if err != nil {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
+			return
+		}
+	}
+	if puzzle == nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "no_puzzle", Message: "no puzzle for that game and date"})
+		return
+	}
+
+	attempt, err := h.store.GetOrCreateAttempt(r.Context(), puzzle.ID, playerID, anon)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "attempt_failed", Message: err.Error()})
+		return
+	}
+	view, err := h.store.BuildView(r.Context(), puzzle, attempt)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "view_failed", Message: err.Error()})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, view)
+}
+
+// Guess scores a title guess against the puzzle's answer.
+func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePuzzleID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		AnimeID int64  `json:"animeId"`
+		Title   string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AnimeID == 0 {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: "expected an animeId"})
+		return
+	}
+	playerID, anon, ok := h.resolve(w, r)
+	if !ok {
+		return
+	}
+	puzzle, attempt, ok := h.load(w, r, id, playerID, anon)
+	if !ok {
+		return
+	}
+	detail, err := h.anime.GetDetailByID(r.Context(), body.AnimeID)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "guess_failed", Message: err.Error()})
+		return
+	}
+	if detail == nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "unknown_anime", Message: "no anime with that id"})
+		return
+	}
+	res, err := h.store.Guess(r.Context(), puzzle, attempt, detail)
+	if err != nil {
+		writeGameErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *PuzzleHandler) load(w http.ResponseWriter, r *http.Request, id int64, playerID uuid.UUID, anon bool) (*games.Puzzle, *games.Attempt, bool) {
+	puzzle, err := h.store.GetByID(r.Context(), id)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
+		return nil, nil, false
+	}
+	if puzzle == nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusNotFound, Code: "no_puzzle", Message: "puzzle not found"})
+		return nil, nil, false
+	}
+	attempt, err := h.store.GetOrCreateAttempt(r.Context(), puzzle.ID, playerID, anon)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "attempt_failed", Message: err.Error()})
+		return nil, nil, false
+	}
+	return puzzle, attempt, true
+}
+
+func parsePuzzleID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_id", Message: "id must be numeric"})
+		return 0, false
+	}
+	return id, true
+}
+
+// writeGameErr maps the games package's play errors to status codes.
+func writeGameErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, games.ErrNoTries):
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusConflict, Code: "no_tries", Message: "no tries left"})
+	case errors.Is(err, games.ErrNotPlaying):
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusConflict, Code: "round_over", Message: "round already over"})
+	default:
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "play_failed", Message: err.Error()})
+	}
+}

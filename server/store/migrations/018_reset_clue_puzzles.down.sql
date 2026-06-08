@@ -1,0 +1,1 @@
+-- The cleared puzzles regenerate on the next pass so the down is a no-op.

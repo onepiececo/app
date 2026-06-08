@@ -1,0 +1,1 @@
+-- The synopsis row is gone for good so the down is a no-op.

@@ -39,6 +39,13 @@ type Config struct {
 	JikanBatch     int    `env:"JIKAN_BATCH" envDefault:"50"`
 	JikanRPM       int    `env:"JIKAN_RPM" envDefault:"60"`
 	JikanPerSecond int    `env:"JIKAN_PER_SECOND" envDefault:"3"`
+
+	// GamesEnabled toggles the daily puzzle generator and its endpoints.
+	GamesEnabled bool `env:"GAMES_ENABLED" envDefault:"true"`
+	// GamesCron drives the generation pass that ensures today and extends the backfill, frequent so prior days fill in.
+	GamesCron string `env:"GAMES_CRON" envDefault:"*/5 * * * *"`
+	// GamesBackfillChunk caps how many older days one pass fills, the backfill walks further back each run.
+	GamesBackfillChunk int `env:"GAMES_BACKFILL_CHUNK" envDefault:"30"`
 }
 
 func Load() (*Config, error) {

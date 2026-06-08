@@ -23,6 +23,7 @@ type gameRow struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Mode        string `json:"mode"`
 	IsActive    bool   `json:"isActive"`
 }
 
@@ -30,7 +31,7 @@ type gameRow struct {
 // merge their own metadata (tone, copy) against a stable, canonical list.
 func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.pool.Query(r.Context(), `
-		SELECT id, name, COALESCE(description, ''), is_active
+		SELECT id, name, COALESCE(description, ''), mode, is_active
 		FROM game
 		ORDER BY id
 	`)
@@ -43,7 +44,7 @@ func (h *CatalogHandler) Games(w http.ResponseWriter, r *http.Request) {
 	games := make([]gameRow, 0)
 	for rows.Next() {
 		var g gameRow
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.IsActive); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.Mode, &g.IsActive); err != nil {
 			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "games_scan", Message: err.Error()})
 			return
 		}

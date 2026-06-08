@@ -1,0 +1,1 @@
+-- This only normalizes game names and descriptions to the catalog, the rows are owned by 005 and 014, so the down is a no-op.

@@ -18,7 +18,9 @@ import (
 
 	"github.com/kgrahammatzen/onepiece-server/api"
 	"github.com/kgrahammatzen/onepiece-server/config"
+	"github.com/kgrahammatzen/onepiece-server/internal/anime"
 	"github.com/kgrahammatzen/onepiece-server/internal/auth"
+	"github.com/kgrahammatzen/onepiece-server/internal/games"
 	"github.com/kgrahammatzen/onepiece-server/internal/ingest"
 	"github.com/kgrahammatzen/onepiece-server/store"
 )
@@ -130,11 +132,19 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 		JikanPerSecond:     cfg.JikanPerSecond,
 	}
 
+	queueArgs := []any{"anilist", 3, "jikan", 1}
+	crons := ingest.WinterCron(ingestOpts)
+	gamesOpts := games.WinterOptions{Cron: cfg.GamesCron, BackfillChunk: cfg.GamesBackfillChunk}
+	if cfg.GamesEnabled {
+		queueArgs = append(queueArgs, "games", 1)
+		crons = append(crons, games.WinterCron(gamesOpts)...)
+	}
+
 	server, err := winter.NewServer(redisCfg, winter.ServerConfig{
 		Concurrency: cfg.IngestConcurrency,
 		Logger:      newLogger("warn", cfg.LogFormat),
-		Queues:      winter.Queues("anilist", 3, "jikan", 1),
-		Cron:        ingest.WinterCron(ingestOpts),
+		Queues:      winter.Queues(queueArgs...),
+		Cron:        crons,
 	})
 	if err != nil {
 		logger.Error("failed to start winter server", "error", err)
@@ -143,6 +153,9 @@ func startWinter(ctx context.Context, cfg *config.Config, pool *pgxpool.Pool, lo
 	}
 
 	ingest.RegisterWinter(ctx, server, client, pool, logger, ingestOpts)
+	if cfg.GamesEnabled {
+		games.RegisterWinter(ctx, server, client, games.NewStore(pool), anime.NewStore(pool), logger, gamesOpts)
+	}
 	server.Use(winter.Recover())
 	server.OnDead(func(_ context.Context, ev winter.JobEvent) {
 		logger.Error("background job dead", "kind", ev.Kind, "job_id", ev.ID, "error", ev.Err)
