@@ -29,12 +29,13 @@ type Puzzle struct {
 	AnswerKey json.RawMessage
 }
 
-// Attempt is one player's run at a puzzle, holding the revealed facet indices and the guess count.
+// Attempt is one player's run at a puzzle, holding the guess count and the higher lower chain position.
 type Attempt struct {
 	ID           int64
 	Status       string
 	GuessesCount int
 	Revealed     []int
+	Index        int
 }
 
 func scanPuzzle(row pgx.Row) (*Puzzle, error) {
@@ -210,14 +211,39 @@ func (s *Store) GetOrCreateAttempt(ctx context.Context, puzzleID int64, playerID
 	var a Attempt
 	var revealed []byte
 	if err := s.pool.QueryRow(ctx, `
-		SELECT id, status, guesses_count, COALESCE(state->'revealed', '[]'::jsonb)
+		SELECT id, status, guesses_count, COALESCE(state->'revealed', '[]'::jsonb), COALESCE((state->>'index')::int, 0)
 		FROM puzzle_attempt
 		WHERE puzzle_id = $1 AND player_id = $2
-	`, puzzleID, playerID).Scan(&a.ID, &a.Status, &a.GuessesCount, &revealed); err != nil {
+	`, puzzleID, playerID).Scan(&a.ID, &a.Status, &a.GuessesCount, &revealed, &a.Index); err != nil {
 		return nil, err
 	}
 	_ = json.Unmarshal(revealed, &a.Revealed)
 	return &a, nil
+}
+
+// RecordHLGuess writes a higher lower call and advances the chain position in one transaction.
+func (s *Store) RecordHLGuess(ctx context.Context, attemptID int64, direction string, result json.RawMessage, newIndex, position int) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO puzzle_guess (attempt_id, anime_id, raw_guess, normalized_guess, result, position)
+		VALUES ($1, NULL, $2, $2, $3, $4)
+	`, attemptID, direction, result, position); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE puzzle_attempt
+		SET guesses_count = guesses_count + 1,
+		    state = jsonb_set(COALESCE(state, '{}'::jsonb), '{index}', to_jsonb($2::int))
+		WHERE id = $1
+	`, attemptID, newIndex); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // RecordGuess writes a guess row with its scored result and bumps the attempt's guess count in one transaction.

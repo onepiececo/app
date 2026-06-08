@@ -41,12 +41,20 @@ func WinterCron(opts WinterOptions) []winter.CronEntry {
 // RegisterWinter wires the daily generator onto the shared server and kicks one pass on boot so today exists at once.
 func RegisterWinter(ctx context.Context, server *winter.Server, client *winter.Client, store *Store, ar animeReader, logger *slog.Logger, opts WinterOptions) {
 	winter.HandleFunc(server, func(c context.Context, _ *winter.Job[GamesDaily]) error {
-		err := store.BackfillClue(c, ar, logger, opts.BackfillChunk)
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
-		if err != nil {
-			logger.Error("games daily run failed", "error", err)
+		for _, run := range []struct {
+			name string
+			fn   func(context.Context, animeReader, *slog.Logger, int) error
+		}{
+			{"clue", store.BackfillClue},
+			{"higher lower", store.BackfillHigherLower},
+		} {
+			err := run.fn(c, ar, logger, opts.BackfillChunk)
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			if err != nil {
+				logger.Error("games daily run failed", "game", run.name, "error", err)
+			}
 		}
 		logNextRun(logger, "games", opts.Cron)
 		return nil

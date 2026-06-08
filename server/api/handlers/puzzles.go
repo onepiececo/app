@@ -84,9 +84,15 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
 		return
 	}
-	// Generate today on demand for clue so a fresh server serves it before the cron tick.
-	if puzzle == nil && game == games.ClueGame {
-		if _, err := h.store.EnsureClueForDate(r.Context(), h.anime, date); err != nil {
+	// Generate today on demand so a fresh server serves it before the cron tick.
+	if puzzle == nil {
+		switch game {
+		case games.ClueGame:
+			_, err = h.store.EnsureClueForDate(r.Context(), h.anime, date)
+		case games.HigherLowerGame:
+			_, err = h.store.EnsureHigherLowerForDate(r.Context(), h.anime, date)
+		}
+		if err != nil {
 			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "puzzle_failed", Message: err.Error()})
 			return
 		}
@@ -104,6 +110,15 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 	attempt, err := h.store.GetOrCreateAttempt(r.Context(), puzzle.ID, playerID, anon)
 	if err != nil {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "attempt_failed", Message: err.Error()})
+		return
+	}
+	if puzzle.GameID == games.HigherLowerGame {
+		view, err := h.store.BuildHLView(puzzle, attempt)
+		if err != nil {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "view_failed", Message: err.Error()})
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, view)
 		return
 	}
 	view, err := h.store.BuildView(r.Context(), puzzle, attempt)
@@ -141,18 +156,10 @@ func (h *PuzzleHandler) Statuses(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, statuses)
 }
 
-// Guess scores a title guess against the puzzle's answer.
+// Guess scores a guess against the puzzle's answer, a title for clue or a higher lower call.
 func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePuzzleID(w, r)
 	if !ok {
-		return
-	}
-	var body struct {
-		AnimeID int64  `json:"animeId"`
-		Title   string `json:"title"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AnimeID == 0 {
-		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: "expected an animeId"})
 		return
 	}
 	playerID, anon, ok := h.resolve(w, r)
@@ -161,6 +168,32 @@ func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 	}
 	puzzle, attempt, ok := h.load(w, r, id, playerID, anon)
 	if !ok {
+		return
+	}
+
+	if puzzle.GameID == games.HigherLowerGame {
+		var body struct {
+			Direction string `json:"direction"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: "expected a direction"})
+			return
+		}
+		res, err := h.store.GuessHL(r.Context(), puzzle, attempt, body.Direction)
+		if err != nil {
+			writeGameErr(w, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, res)
+		return
+	}
+
+	var body struct {
+		AnimeID int64  `json:"animeId"`
+		Title   string `json:"title"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AnimeID == 0 {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_body", Message: "expected an animeId"})
 		return
 	}
 	detail, err := h.anime.GetDetailByID(r.Context(), body.AnimeID)
@@ -214,6 +247,8 @@ func writeGameErr(w http.ResponseWriter, err error) {
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusConflict, Code: "no_tries", Message: "no tries left"})
 	case errors.Is(err, games.ErrNotPlaying):
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusConflict, Code: "round_over", Message: "round already over"})
+	case errors.Is(err, games.ErrInvalidDirection):
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusBadRequest, Code: "bad_direction", Message: "direction must be higher or lower"})
 	default:
 		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "play_failed", Message: err.Error()})
 	}

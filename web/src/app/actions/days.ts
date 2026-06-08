@@ -19,7 +19,7 @@ const PRESENTATION: Record<string, Presentation> = {
   clue: { className: "text-indigo-700 hover:bg-indigo-500/8 dark:text-indigo-300", accent: "text-indigo-700 dark:text-indigo-300", href: "/clue" },
   cover: { className: "text-sky-700 hover:bg-sky-500/8 dark:text-sky-300", accent: "text-sky-700 dark:text-sky-300" },
   character: { className: "text-violet-700 hover:bg-violet-500/8 dark:text-violet-300", accent: "text-violet-700 dark:text-violet-300" },
-  higherlower: { className: "text-amber-800 hover:bg-amber-500/8 dark:text-amber-300", accent: "text-amber-800 dark:text-amber-300" },
+  higherlower: { className: "text-amber-800 hover:bg-amber-500/8 dark:text-amber-300", accent: "text-amber-800 dark:text-amber-300", href: "/higherlower" },
   groups: { className: "text-rose-700 hover:bg-rose-500/8 dark:text-rose-300", accent: "text-rose-700 dark:text-rose-300" },
   timeline: { className: "text-emerald-700 hover:bg-emerald-500/8 dark:text-emerald-300", accent: "text-emerald-700 dark:text-emerald-300" },
   dial: { className: "text-fuchsia-700 hover:bg-fuchsia-500/8 dark:text-fuchsia-300", accent: "text-fuchsia-700 dark:text-fuchsia-300" },

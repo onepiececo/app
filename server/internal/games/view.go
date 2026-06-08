@@ -18,8 +18,9 @@ const (
 )
 
 var (
-	ErrNoTries    = errors.New("games: no tries left")
-	ErrNotPlaying = errors.New("games: round already over")
+	ErrNoTries          = errors.New("games: no tries left")
+	ErrNotPlaying       = errors.New("games: round already over")
+	ErrInvalidDirection = errors.New("games: direction must be higher or lower")
 )
 
 // FieldCmp is one scalar attribute scored against the answer, the arrow points toward the answer when numeric.

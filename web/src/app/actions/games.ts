@@ -76,3 +76,30 @@ export async function submitGuess(puzzleId: number, animeId: number, title: stri
     ...(await identity(anonKey)),
   }).catch(() => null);
 }
+
+export type HLEntry = { animeId: number; title: string; coverSourceUrl?: string; coverColor?: string; score?: number };
+export type HLPuzzle = {
+  id: number;
+  game: string;
+  date: string;
+  status: PuzzleStatus;
+  index: number;
+  length: number;
+  reference: HLEntry;
+  next?: HLEntry;
+};
+export type HLGuessResult = { correct: boolean; lastScore: number; view: HLPuzzle };
+
+export async function getHigherLower(date: string | undefined, anonKey: string): Promise<HLPuzzle | null> {
+  const params = new URLSearchParams({ game: "higherlower" });
+  if (date) params.set("date", date);
+  return serverJSON<HLPuzzle>(`/v1/puzzles?${params.toString()}`, await identity(anonKey)).catch(() => null);
+}
+
+export async function guessHigherLower(puzzleId: number, direction: "higher" | "lower", anonKey: string): Promise<HLGuessResult | null> {
+  return serverJSON<HLGuessResult>(`/v1/puzzles/${puzzleId}/guess`, {
+    method: "POST",
+    body: JSON.stringify({ direction }),
+    ...(await identity(anonKey)),
+  }).catch(() => null);
+}
