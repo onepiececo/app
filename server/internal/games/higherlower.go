@@ -49,17 +49,21 @@ func (s *Store) GenerateHigherLower(ctx context.Context, ar animeReader, date ti
 	}
 
 	start := int(dateSeed(HigherLowerGame, iso) % uint64(len(pool)))
-	stride := len(pool) / hlChainLen
+	sample := min(hlChainLen*4, len(pool))
+	stride := max(len(pool)/sample, 1)
+	// Distinct scores so no two anime in the chain tie, every call is a clear higher or lower.
+	usedScore := make(map[int]bool)
 	items := make([]hlItem, 0, hlChainLen)
-	for i := 0; len(items) < hlChainLen && i < len(pool); i++ {
+	for i := 0; len(items) < hlChainLen && i < sample; i++ {
 		cand := pool[(start+i*stride)%len(pool)]
 		d, err := ar.GetDetailByID(ctx, cand)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		if d == nil || d.AverageScore == nil {
+		if d == nil || d.AverageScore == nil || usedScore[*d.AverageScore] {
 			continue
 		}
+		usedScore[*d.AverageScore] = true
 		it := hlItem{AnimeID: d.ID, Title: d.TitlePrimary, Score: *d.AverageScore}
 		if d.CoverSourceURL != nil {
 			it.CoverSourceURL = *d.CoverSourceURL

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useDay } from "@/components/day-provider";
 import { getHigherLower, guessHigherLower, type HLEntry, type HLPuzzle } from "@/app/actions/games";
 import { Button } from "@/components/ui/button";
@@ -10,15 +11,17 @@ import { cn } from "@/lib/utils";
 
 const COVER_TEXT = "[text-shadow:_0_0_0.2rem_rgb(0_0_0/0.95),_0_0.06rem_0.2rem_rgb(0_0_0/0.9),_0_0.12rem_0.5rem_rgb(0_0_0/0.5)]";
 
-const Cover = (props: { entry: HLEntry; score?: number; tone?: "hit" | "miss" }) => {
+const Cover = (props: { entry: HLEntry; score?: number; tone?: "hit" | "miss"; linked?: boolean }) => {
   const a = props.entry;
-  return (
-    <div className="relative aspect-2/3 w-40 shrink-0 overflow-hidden rounded-xl bg-muted" style={a.coverColor ? { backgroundColor: a.coverColor } : undefined}>
+  const style = a.coverColor ? { backgroundColor: a.coverColor } : undefined;
+  const cls = "relative block aspect-2/3 w-40 shrink-0 overflow-hidden rounded-xl bg-muted";
+  const inner = (
+    <>
       {a.coverSourceUrl ? <Image src={a.coverSourceUrl} alt={a.title} fill sizes="10rem" className="object-cover" /> : null}
-      <div className="absolute inset-0 bg-black/35" />
+      <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/35 group-focus-visible:bg-black/35" />
       <span className={cn("absolute top-2 right-2 left-2 line-clamp-2 font-semibold text-sm text-white leading-tight", COVER_TEXT)}>{a.title}</span>
       <span className="absolute inset-x-2 bottom-2 flex flex-col items-center gap-0.5">
-        <span className="text-[10px] text-white/80 uppercase tracking-wide">score</span>
+        <span className={cn("text-[10px] text-white/80 uppercase tracking-wide", COVER_TEXT)}>score</span>
         {props.score !== undefined ? (
           <span className={cn("font-bold text-3xl text-white leading-none tabular-nums", COVER_TEXT, props.tone === "hit" && "text-success", props.tone === "miss" && "text-destructive")}>
             {(props.score / 10).toFixed(1)}
@@ -27,6 +30,18 @@ const Cover = (props: { entry: HLEntry; score?: number; tone?: "hit" | "miss" })
           <span className={cn("font-bold text-3xl text-white leading-none", COVER_TEXT)}>?</span>
         )}
       </span>
+    </>
+  );
+  if (props.linked) {
+    return (
+      <Link href={`/anime/${a.animeId}`} prefetch={false} className={cn(cls, "group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white")} style={style}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div className={cls} style={style}>
+      {inner}
     </div>
   );
 };
@@ -106,9 +121,9 @@ export const HigherBoard = () => {
 
       <div className="flex flex-col items-center gap-6">
         <div className="flex items-center gap-4 sm:gap-6">
-          <Cover entry={puzzle.reference} score={puzzle.reference.score} />
+          <Cover entry={puzzle.reference} score={puzzle.reference.score} linked={over} />
           <span className="font-medium text-muted-foreground text-xs uppercase">or</span>
-          {puzzle.next ? <Cover entry={puzzle.next} score={reveal ? reveal.score : puzzle.next.score} tone={reveal ? (reveal.correct ? "hit" : "miss") : undefined} /> : null}
+          {puzzle.next ? <Cover entry={puzzle.next} score={reveal ? reveal.score : puzzle.next.score} tone={reveal ? (reveal.correct ? "hit" : "miss") : undefined} linked={over} /> : null}
         </div>
         {!over && !reveal ? (
           <div className="flex gap-2">
