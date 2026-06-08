@@ -68,6 +68,20 @@ const relationColor = (type: string) => {
   return "text-zinc-300";
 };
 
+// Best order. Relationship type sets the priority so the story reads forward,
+// source then prequel, sequel, parent, then the branches, with loose links
+// last. Within a type the oldest entry leads so a run of sequels reads as a
+// release timeline.
+const RELATION_PRIORITY = ["SOURCE", "PREQUEL", "SEQUEL", "PARENT", "SIDE_STORY", "SPIN_OFF", "ALTERNATIVE", "SUMMARY", "COMPILATION", "ADAPTATION", "CHARACTER", "CONTAINS", "OTHER"];
+const relationRank = (type: string) => {
+  const i = RELATION_PRIORITY.indexOf(type);
+  return i === -1 ? RELATION_PRIORITY.length : i;
+};
+const byBestOrder = (a: AnimeRelation, b: AnimeRelation) => {
+  if (relationRank(a.relationType) !== relationRank(b.relationType)) return relationRank(a.relationType) - relationRank(b.relationType);
+  return (a.seasonYear ?? 0) - (b.seasonYear ?? 0);
+};
+
 
 const COVER_OVERLAY_TEXT = "[text-shadow:_0_0_3px_rgb(0_0_0/0.95),_0_1px_3px_rgb(0_0_0/0.9),_0_2px_8px_rgb(0_0_0/0.5)]";
 
@@ -122,23 +136,22 @@ const Stat = (props: { label: string; value: string | number | null | undefined 
 };
 
 
+// Relations whose target is not in our catalog yet collapse into one placeholder
+// rather than a row of empty boxes, the count keeps the same poster footprint.
+const PendingTile = (props: { count: number }) => (
+  <div className="-m-2 p-2">
+    <div className="relative flex aspect-2/3 items-center justify-center border border-border bg-gradient-to-br from-muted/60 to-muted/20">
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="font-semibold text-3xl text-foreground/80 tabular-nums">{props.count}</span>
+        <span className="font-medium text-muted-foreground text-xs uppercase tracking-wide">Pending</span>
+      </div>
+    </div>
+  </div>
+);
+
 const RelationCard = (props: { relation: AnimeRelation }) => {
   const r = props.relation;
   const label = RELATION_LABEL[r.relationType] ?? r.relationType;
-  // External relations have no row in the database yet, the type label
-  // already names the relationship so the body just confirms it is pending.
-  if (!r.animeId) {
-    return (
-      <div className="-m-2 p-2">
-        <div className="flex aspect-2/3 flex-col justify-between border border-border border-dashed bg-muted/30 p-3">
-          <span className="font-semibold text-foreground text-xs uppercase tracking-wide">
-            {label}
-          </span>
-          <span className="font-medium text-muted-foreground text-xs">Pending ingest</span>
-        </div>
-      </div>
-    );
-  }
   return (
     <Link
       href={`/anime/${r.animeId}`}
@@ -170,7 +183,8 @@ const RelationCard = (props: { relation: AnimeRelation }) => {
 export default async function AnimeDetailPage(props: AnimeDetailProps) {
   const { id } = await props.params;
   const numId = Number(id);
-  if (!Number.isFinite(numId)) notFound();
+  // Ids start at one, bail before the api call so a stray /anime/0 stops pinging the server.
+  if (!Number.isInteger(numId) || numId < 1) notFound();
   const anime = await getAnimeById(numId);
   if (!anime) notFound();
 
@@ -179,7 +193,9 @@ export default async function AnimeDetailPage(props: AnimeDetailProps) {
   const studios = anime.studios ?? [];
   const mainStudios = studios.filter((s) => s.isMain);
   const otherStudios = studios.filter((s) => !s.isMain);
-  const relations = anime.relations ?? [];
+  const allRelations = anime.relations ?? [];
+  const presentRelations = allRelations.filter((r) => r.animeId).sort(byBestOrder);
+  const pendingCount = allRelations.length - presentRelations.length;
   const score = typeof anime.averageScore === "number" ? (anime.averageScore / 10).toFixed(1) : null;
 
   return (
@@ -215,7 +231,6 @@ export default async function AnimeDetailPage(props: AnimeDetailProps) {
           </div>
         ) : null}
         <Stat label="Popularity" value={anime.popularity > 0 ? anime.popularity.toLocaleString() : null} />
-        <Stat label="Favourites" value={anime.favourites > 0 ? anime.favourites.toLocaleString() : null} />
       </section>
 
       {anime.genres && anime.genres.length > 0 ? (
@@ -256,13 +271,14 @@ export default async function AnimeDetailPage(props: AnimeDetailProps) {
         <CharacterStrip characters={anime.characters} />
       ) : null}
 
-      {relations.length > 0 ? (
+      {presentRelations.length > 0 || pendingCount > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className={SECTION_LABEL}>Relations</h2>
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-            {relations.map((r, i) => (
-              <RelationCard key={`${r.relationType}-${r.animeId ?? r.externalId ?? i}`} relation={r} />
+            {presentRelations.map((r) => (
+              <RelationCard key={`${r.relationType}-${r.animeId}`} relation={r} />
             ))}
+            {pendingCount > 0 ? <PendingTile count={pendingCount} /> : null}
           </div>
         </section>
       ) : null}
