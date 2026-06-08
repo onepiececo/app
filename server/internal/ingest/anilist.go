@@ -48,7 +48,6 @@ const anilistMediaFields = `
   averageScore
   meanScore
   popularity
-  favourites
   isAdult
   genres
   tags {
@@ -152,7 +151,6 @@ type anilistMedia struct {
 	AverageScore *int     `json:"averageScore"`
 	MeanScore    *int     `json:"meanScore"`
 	Popularity   int      `json:"popularity"`
-	Favourites   int      `json:"favourites"`
 	IsAdult      bool     `json:"isAdult"`
 	Genres       []string `json:"genres"`
 	Tags         []struct {
@@ -343,7 +341,6 @@ func toUpsert(m anilistMedia) *anime.AnimeUpsert {
 		AverageScore:    m.AverageScore,
 		MeanScore:       m.MeanScore,
 		Popularity:      m.Popularity,
-		Favourites:      m.Favourites,
 		IsAdult:         m.IsAdult,
 		CoverSourceURL:  dropAniListDefault(firstNonEmpty(m.CoverImage.ExtraLarge, m.CoverImage.Large)),
 		BannerSourceURL: dropAniListDefault(m.BannerImage),

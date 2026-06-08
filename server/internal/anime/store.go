@@ -43,7 +43,6 @@ type Anime struct {
 	AverageScore    *int    `json:"averageScore,omitempty"`
 	MeanScore       *int    `json:"meanScore,omitempty"`
 	Popularity      int     `json:"popularity"`
-	Favourites      int     `json:"favourites"`
 	IsAdult         bool    `json:"isAdult"`
 	IsGameEligible  bool    `json:"isGameEligible"`
 	CoverSourceURL  *string `json:"coverSourceUrl,omitempty"`
@@ -67,7 +66,6 @@ type AnimeUpsert struct {
 	AverageScore    *int
 	MeanScore       *int
 	Popularity      int
-	Favourites      int
 	IsAdult         bool
 	CoverSourceURL  *string
 	BannerSourceURL *string
@@ -134,9 +132,9 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 	err = tx.QueryRow(ctx, `
 		INSERT INTO anime (slug, title_primary, title_romaji, title_english, title_native,
 		                   format, status, source, season, season_year, episodes, duration_minutes,
-		                   average_score, mean_score, popularity, favourites, is_adult,
+		                   average_score, mean_score, popularity, is_adult,
 		                   cover_source_url, banner_source_url, cover_color, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20, now())
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19, now())
 		ON CONFLICT (slug) DO UPDATE SET
 			title_primary     = EXCLUDED.title_primary,
 			title_romaji      = EXCLUDED.title_romaji,
@@ -152,7 +150,6 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 			average_score     = EXCLUDED.average_score,
 			mean_score        = EXCLUDED.mean_score,
 			popularity        = EXCLUDED.popularity,
-			favourites        = EXCLUDED.favourites,
 			is_adult          = EXCLUDED.is_adult,
 			cover_source_url  = EXCLUDED.cover_source_url,
 			banner_source_url = EXCLUDED.banner_source_url,
@@ -161,7 +158,7 @@ func (s *Store) Upsert(ctx context.Context, u *AnimeUpsert) (int64, error) {
 		RETURNING id
 	`, u.Slug, u.TitlePrimary, u.TitleRomaji, u.TitleEnglish, u.TitleNative,
 		u.Format, u.Status, u.Source, u.Season, u.SeasonYear, u.Episodes, u.DurationMinutes,
-		u.AverageScore, u.MeanScore, u.Popularity, u.Favourites, u.IsAdult,
+		u.AverageScore, u.MeanScore, u.Popularity, u.IsAdult,
 		u.CoverSourceURL, u.BannerSourceURL, u.CoverColor).Scan(&animeID)
 	if err != nil {
 		return 0, fmt.Errorf("upsert anime: %w", err)
@@ -377,7 +374,7 @@ func (s *Store) scanOne(ctx context.Context, where string, args ...any) (*Anime,
 	row := s.pool.QueryRow(ctx, `
 		SELECT id, slug, title_primary, title_romaji, title_english, title_native,
 		       format, status, source, season, season_year, episodes, duration_minutes,
-		       average_score, mean_score, popularity, favourites, is_adult,
+		       average_score, mean_score, popularity, is_adult,
 		       is_game_eligible, cover_source_url, banner_source_url, cover_color
 		FROM anime
 	`+where, args...)
@@ -385,7 +382,7 @@ func (s *Store) scanOne(ctx context.Context, where string, args ...any) (*Anime,
 	var a Anime
 	err := row.Scan(&a.ID, &a.Slug, &a.TitlePrimary, &a.TitleRomaji, &a.TitleEnglish, &a.TitleNative,
 		&a.Format, &a.Status, &a.Source, &a.Season, &a.SeasonYear, &a.Episodes, &a.DurationMinutes,
-		&a.AverageScore, &a.MeanScore, &a.Popularity, &a.Favourites, &a.IsAdult,
+		&a.AverageScore, &a.MeanScore, &a.Popularity, &a.IsAdult,
 		&a.IsGameEligible, &a.CoverSourceURL, &a.BannerSourceURL, &a.CoverColor)
 	if err == pgx.ErrNoRows {
 		return nil, nil

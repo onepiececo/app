@@ -77,7 +77,6 @@ export type AnimeDetail = {
   averageScore?: number;
   meanScore?: number;
   popularity: number;
-  favourites: number;
   isAdult: boolean;
   isGameEligible: boolean;
   coverSourceUrl?: string;

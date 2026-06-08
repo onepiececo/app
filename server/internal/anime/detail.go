@@ -64,7 +64,7 @@ func (s *Store) GetDetailByID(ctx context.Context, id int64) (*Detail, error) {
 	batch.Queue(`
 		SELECT id, slug, title_primary, title_romaji, title_english, title_native,
 		       format, status, source, season, season_year, episodes, duration_minutes,
-		       average_score, mean_score, popularity, favourites, is_adult,
+		       average_score, mean_score, popularity, is_adult,
 		       is_game_eligible, cover_source_url, banner_source_url, cover_color
 		FROM anime WHERE id = $1
 	`, id)
@@ -111,7 +111,7 @@ func (s *Store) GetDetailByID(ctx context.Context, id int64) (*Detail, error) {
 	row := br.QueryRow()
 	if err := row.Scan(&d.ID, &d.Slug, &d.TitlePrimary, &d.TitleRomaji, &d.TitleEnglish, &d.TitleNative,
 		&d.Format, &d.Status, &d.Source, &d.Season, &d.SeasonYear, &d.Episodes, &d.DurationMinutes,
-		&d.AverageScore, &d.MeanScore, &d.Popularity, &d.Favourites, &d.IsAdult,
+		&d.AverageScore, &d.MeanScore, &d.Popularity, &d.IsAdult,
 		&d.IsGameEligible, &d.CoverSourceURL, &d.BannerSourceURL, &d.CoverColor); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

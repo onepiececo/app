@@ -86,7 +86,6 @@ export const anime = pgTable("anime", {
   averageScore: integer("average_score"),
   meanScore: integer("mean_score"),
   popularity: integer("popularity").notNull().default(0),
-  favourites: integer("favourites").notNull().default(0),
 
   isAdult: boolean("is_adult").notNull().default(false),
   isGameEligible: boolean("is_game_eligible").notNull().default(true),
@@ -320,6 +319,7 @@ export const game = pgTable("game", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  mode: text("mode").notNull().default("daily"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
