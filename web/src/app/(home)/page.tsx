@@ -3,6 +3,7 @@ import { getDailyGames } from "@/app/actions/days";
 import { DayScroller } from "@/components/day-scroller";
 import { CluePreview } from "@/components/games/clue-preview";
 import { ClueStatus, ClueStatusProvider } from "@/components/games/clue-status";
+import { PreviewDataProvider } from "@/components/games/preview-data";
 import { CharacterPreview, CoverPreview, DialPreview, GroupsPreview, HigherPreview, TimelinePreview } from "@/components/games/previews";
 import { GameTile } from "@/components/game-tile";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,8 @@ export default async function HomePage(props: PageProps<"/">) {
 
   return (
     <ClueStatusProvider>
-      <DayScroller>
+      <PreviewDataProvider>
+        <DayScroller>
         <ul className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 lg:h-full lg:grid-cols-3 lg:grid-rows-3">
           {games.map((g, i) => (
             <li
@@ -50,7 +52,8 @@ export default async function HomePage(props: PageProps<"/">) {
             </li>
           ))}
         </ul>
-      </DayScroller>
+        </DayScroller>
+      </PreviewDataProvider>
     </ClueStatusProvider>
   );
 }

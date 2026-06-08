@@ -3,7 +3,8 @@
 import { motion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { type AnimeCharacter, type AnimeHit, browseAnime, getAnimeById } from "@/app/actions/anime";
+import type { AnimeHit } from "@/app/actions/anime";
+import { usePreviewData } from "@/components/games/preview-data";
 import { scoreColor } from "@/lib/score";
 import { cn } from "@/lib/utils";
 
@@ -19,17 +20,12 @@ const useToggle = (ms: number) => {
 };
 
 const useRandomCover = () => {
+  const { covers } = usePreviewData();
   const [hit, setHit] = useState<AnimeHit | null>(null);
   useEffect(() => {
-    let active = true;
-    browseAnime("popularity", 30).then((list) => {
-      const withCover = list.filter((a) => a.coverSourceUrl);
-      if (active && withCover.length) setHit(withCover[Math.floor(Math.random() * withCover.length)]);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+    const withCover = covers.filter((a) => a.coverSourceUrl);
+    if (withCover.length) setHit(withCover[Math.floor(Math.random() * withCover.length)]);
+  }, [covers]);
   return hit;
 };
 
@@ -39,7 +35,7 @@ export const CoverPreview = () => {
   return (
     <div className="grid h-full place-items-center">
       <div className="relative aspect-2/3 h-full overflow-hidden rounded-md">
-        {hit?.coverSourceUrl ? <Image src={hit.coverSourceUrl} alt="" fill sizes="10rem" className="pv-cover-zoom object-cover" /> : null}
+        {hit?.coverSourceUrl ? <Image src={hit.coverSourceUrl} alt="" fill priority sizes="10rem" className="pv-cover-zoom object-cover" /> : null}
         {hit ? <span className={cn("pv-label absolute top-1.5 right-1.5 left-1.5 line-clamp-2 font-semibold text-[0.65rem] text-white leading-tight", COVER_TEXT)}>{hit.title}</span> : null}
       </div>
     </div>
@@ -48,29 +44,11 @@ export const CoverPreview = () => {
 
 // Character, a real portrait that blurs and clears, the name fades in only while it is sharp.
 export const CharacterPreview = () => {
-  const [chara, setChara] = useState<AnimeCharacter | null>(null);
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const list = await browseAnime("popularity", 10);
-      for (const a of list) {
-        const detail = await getAnimeById(a.id);
-        const cands = detail?.characters?.filter((c) => c.imageUrl) ?? [];
-        const main = cands.find((c) => c.role === "MAIN") ?? cands[0];
-        if (main && active) {
-          setChara(main);
-          return;
-        }
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const chara = usePreviewData().character;
   return (
     <div className="grid h-full place-items-center">
       <div className="relative aspect-2/3 h-full overflow-hidden rounded-md">
-        {chara?.imageUrl ? <Image src={chara.imageUrl} alt="" fill sizes="10rem" className="pv-char object-cover" /> : null}
+        {chara?.imageUrl ? <Image src={chara.imageUrl} alt="" fill priority sizes="10rem" className="pv-char object-cover" /> : null}
         {chara ? <span className={cn("pv-label absolute top-1.5 right-1.5 left-1.5 line-clamp-2 font-semibold text-[0.65rem] text-white leading-tight", COVER_TEXT)}>{chara.name}</span> : null}
       </div>
     </div>
@@ -84,7 +62,7 @@ export const HigherPreview = () => {
   return (
     <div className="grid h-full place-items-center">
       <div className="relative aspect-2/3 h-full overflow-hidden rounded-md bg-muted" style={hit?.coverColor ? { backgroundColor: hit.coverColor } : undefined}>
-        {hit?.coverSourceUrl ? <Image src={hit.coverSourceUrl} alt="" fill sizes="8rem" className="object-cover" /> : null}
+        {hit?.coverSourceUrl ? <Image src={hit.coverSourceUrl} alt="" fill priority sizes="8rem" className="object-cover" /> : null}
         {hit ? <span className={cn("absolute top-1.5 right-1.5 left-1.5 line-clamp-2 font-semibold text-[0.65rem] text-white leading-tight", COVER_TEXT)}>{hit.title}</span> : null}
         <span className={cn("absolute right-1.5 bottom-1.5 font-bold text-base text-white leading-none tabular-nums", COVER_TEXT)}>{score}</span>
       </div>
@@ -94,18 +72,9 @@ export const HigherPreview = () => {
 
 // Timeline, three real covers that reorder into release order, the year reveals as they settle.
 export const TimelinePreview = () => {
-  const [hits, setHits] = useState<AnimeHit[]>([]);
+  const { covers } = usePreviewData();
   const sorted = useToggle(2600);
-  useEffect(() => {
-    let active = true;
-    browseAnime("popularity", 16).then((list) => {
-      const picked = list.filter((a) => a.coverSourceUrl && a.year).slice(0, 3);
-      if (active) setHits(picked);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const hits = covers.filter((a) => a.coverSourceUrl && a.year).slice(0, 3);
   if (hits.length < 3) return null;
   const withYear = hits.map((h) => ({ ...h, yr: h.year ?? 2000 }));
   const order = sorted ? [...withYear].sort((a, b) => a.yr - b.yr) : withYear;

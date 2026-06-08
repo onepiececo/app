@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useDay } from "@/components/day-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,7 +18,10 @@ import { SELECTED_DAY_CLASS, toIso } from "@/lib/days";
 
 export const HomeMobileDate = () => {
   const day = useDay();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // The day picker only belongs on the home rail, other routes keep the bar clean.
+  if (pathname !== "/") return null;
   return (
     <Popup open={open} onOpenChange={setOpen}>
       <PopupTrigger
