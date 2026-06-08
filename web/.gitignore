@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 # Override the user-wide *.md ignore. Project docs (AGENTS.md, ai/**) ship in the repo.
 !*.md
 !ai/**/*.md
+
+# local scratchpad, not committed
+src/app/test/
