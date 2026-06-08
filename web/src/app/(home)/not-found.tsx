@@ -1,6 +1,6 @@
 import { NotFoundView } from "@/components/not-found-view";
 
-// Catches notFound from a route and any unmatched url, the view sizes itself for both the home shell and standalone.
+// Lives in the home segment so a missing route still renders inside the sidebar shell.
 export default function NotFound() {
   return <NotFoundView />;
 }
