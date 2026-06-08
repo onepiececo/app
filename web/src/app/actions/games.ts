@@ -56,6 +56,13 @@ async function identity(anonKey: string): Promise<{ anonKey?: string }> {
   }
 }
 
+export type ClueDayStatus = { date: string; status: "in_progress" | "won" | "lost" };
+
+// Read only per day standing for the home grid, the identity helper picks the bearer token or the anon key.
+export async function getClueStatuses(game: string, anonKey: string): Promise<ClueDayStatus[]> {
+  return serverJSON<ClueDayStatus[]>(`/v1/puzzles/statuses?game=${game}`, await identity(anonKey)).catch(() => []);
+}
+
 export async function getPuzzle(game: string, date: string | undefined, anonKey: string): Promise<CluePuzzle | null> {
   const params = new URLSearchParams({ game });
   if (date) params.set("date", date);

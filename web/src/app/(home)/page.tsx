@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { getDailyGames } from "@/app/actions/days";
 import { DayScroller } from "@/components/day-scroller";
 import { CluePreview } from "@/components/games/clue-preview";
+import { ClueStatus, ClueStatusProvider } from "@/components/games/clue-status";
 import { CharacterPreview, CoverPreview, DialPreview, GroupsPreview, HigherPreview, TimelinePreview } from "@/components/games/previews";
 import { GameTile } from "@/components/game-tile";
 import { cn } from "@/lib/utils";
@@ -25,28 +26,31 @@ export default async function HomePage(props: PageProps<"/">) {
   const games = await getDailyGames(typeof sp.date === "string" ? sp.date : "");
 
   return (
-    <DayScroller>
-      <ul className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 lg:h-full lg:grid-cols-3 lg:grid-rows-3">
-        {games.map((g, i) => (
-          <li
-            key={g.key}
-            className={cn(
-              "bg-background",
-              i === games.length - 1 && "md:col-span-2 lg:col-span-1",
-            )}
-          >
-            <GameTile
-              name={g.name}
-              className={g.className}
-              available={g.available}
-              href={g.href}
-              preview={PREVIEWS[g.key]}
+    <ClueStatusProvider>
+      <DayScroller>
+        <ul className="grid grid-cols-1 gap-px bg-border md:grid-cols-2 lg:h-full lg:grid-cols-3 lg:grid-rows-3">
+          {games.map((g, i) => (
+            <li
+              key={g.key}
+              className={cn(
+                "bg-background",
+                i === games.length - 1 && "md:col-span-2 lg:col-span-1",
+              )}
             >
-              {g.tagline}
-            </GameTile>
-          </li>
-        ))}
-      </ul>
-    </DayScroller>
+              <GameTile
+                name={g.name}
+                className={g.className}
+                available={g.available}
+                href={g.href}
+                preview={PREVIEWS[g.key]}
+                status={g.key === "clue" ? <ClueStatus /> : undefined}
+              >
+                {g.tagline}
+              </GameTile>
+            </li>
+          ))}
+        </ul>
+      </DayScroller>
+    </ClueStatusProvider>
   );
 }

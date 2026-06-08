@@ -21,15 +21,19 @@ export const GameTile = (props: GameTileProps) => {
   const surface =
     "relative flex aspect-5/3 w-full flex-col justify-end gap-2 p-5 transition-colors duration-150 ease-out lg:aspect-auto lg:h-full lg:gap-1.5 lg:px-6 lg:py-10 xl:px-8 xl:py-16";
 
-  const statusSlot = props.status ? <div className="absolute top-3 right-3 z-10">{props.status}</div> : null;
+  const nameRow = (muted?: boolean) => (
+    <div className="flex items-center justify-between gap-2">
+      <span className={cn("font-medium text-xs uppercase tracking-wider", muted && "text-muted-foreground/70")}>{props.name}</span>
+      {props.status}
+    </div>
+  );
 
   // A tile with an animated preview fills the card with it, the name and description stay at the bottom.
   if (props.preview) {
     const inner = (
       <>
-        {statusSlot}
         <div className="min-h-0 flex-1 pb-2">{props.preview}</div>
-        <span className="font-medium text-xs uppercase tracking-wider">{props.name}</span>
+        {nameRow()}
         <Heading className="text-sm leading-snug lg:text-[11px]">{props.children}</Heading>
       </>
     );
@@ -52,14 +56,7 @@ export const GameTile = (props: GameTileProps) => {
           available ? "size-12 text-foreground/10" : "size-10 text-foreground/15",
         )}
       />
-      <span
-        className={cn(
-          "font-medium text-xs uppercase tracking-wider",
-          available ? null : "text-muted-foreground/70",
-        )}
-      >
-        {props.name}
-      </span>
+      {nameRow(!available)}
       <Heading className="text-sm leading-snug lg:text-[11px]">{props.children}</Heading>
     </>
   );
@@ -67,7 +64,6 @@ export const GameTile = (props: GameTileProps) => {
   if (available && props.href) {
     return (
       <Link href={props.href} className={cn(surface, "bg-muted/40", props.className)}>
-        {statusSlot}
         {body}
       </Link>
     );
@@ -75,7 +71,6 @@ export const GameTile = (props: GameTileProps) => {
 
   return (
     <div className={cn(surface, available ? cn("bg-muted/40", props.className) : "bg-muted/15 hover:bg-muted/25")}>
-      {statusSlot}
       {body}
     </div>
   );
