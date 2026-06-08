@@ -1,9 +1,9 @@
-import { AuthCard } from "@/components/auth-card";
+import { SignUpForm } from "@/components/sign-up-form";
 
 export const metadata = {
   title: "Create account | onepiece",
 };
 
 export default function SignUpPage() {
-  return <AuthCard initialTab="signup" />;
+  return <SignUpForm />;
 }

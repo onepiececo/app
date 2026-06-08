@@ -1,9 +1,9 @@
-import { AuthCard } from "@/components/auth-card";
+import { SignInForm } from "@/components/sign-in-form";
 
 export const metadata = {
   title: "Sign in | onepiece",
 };
 
 export default function SignInPage() {
-  return <AuthCard initialTab="signin" />;
+  return <SignInForm />;
 }
