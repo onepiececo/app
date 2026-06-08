@@ -251,7 +251,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           />
         ))}
       </nav>
-      <DateButton />
+      {pathname.startsWith("/anime") ? null : <DateButton />}
       <div className="mt-auto flex w-full flex-col gap-1">
         <ThemeRow />
         <Account user={props.user} />

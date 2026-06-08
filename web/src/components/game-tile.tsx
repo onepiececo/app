@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import Link from "next/link";
 import { CalendarClock, ImageIcon } from "lucide-react";
 import { Heading } from "@/components/ui/heading";
 import { cn } from "@/lib/utils";
@@ -7,19 +8,43 @@ export type GameTileProps = {
   name: string;
   className: string;
   available?: boolean;
+  href?: string;
+  preview?: ReactNode;
+  status?: ReactNode;
   children: ReactNode;
 };
 
 export const GameTile = (props: GameTileProps) => {
   const available = props.available ?? false;
   const Icon = available ? ImageIcon : CalendarClock;
-  return (
-    <div
-      className={cn(
-        "relative flex aspect-5/3 w-full flex-col justify-end gap-2 p-5 transition-colors duration-150 ease-out lg:aspect-auto lg:h-full lg:gap-1.5 lg:px-6 lg:py-10 xl:px-8 xl:py-16",
-        available ? cn("bg-muted/40", props.className) : "bg-muted/15 hover:bg-muted/25",
-      )}
-    >
+
+  const surface =
+    "relative flex aspect-5/3 w-full flex-col justify-end gap-2 p-5 transition-colors duration-150 ease-out lg:aspect-auto lg:h-full lg:gap-1.5 lg:px-6 lg:py-10 xl:px-8 xl:py-16";
+
+  const statusSlot = props.status ? <div className="absolute top-3 right-3 z-10">{props.status}</div> : null;
+
+  // A tile with an animated preview fills the card with it, the name and description stay at the bottom.
+  if (props.preview) {
+    const inner = (
+      <>
+        {statusSlot}
+        <div className="min-h-0 flex-1 pb-2">{props.preview}</div>
+        <span className="font-medium text-xs uppercase tracking-wider">{props.name}</span>
+        <Heading className="text-sm leading-snug lg:text-[11px]">{props.children}</Heading>
+      </>
+    );
+    if (available && props.href) {
+      return (
+        <Link href={props.href} className={cn(surface, "bg-muted/40", props.className)}>
+          {inner}
+        </Link>
+      );
+    }
+    return <div className={cn(surface, "bg-muted/40", props.className)}>{inner}</div>;
+  }
+
+  const body = (
+    <>
       <Icon
         aria-hidden
         className={cn(
@@ -35,9 +60,23 @@ export const GameTile = (props: GameTileProps) => {
       >
         {props.name}
       </span>
-      <Heading className="text-sm leading-snug lg:text-[11px]">
-        {available ? props.children : "Coming soon"}
-      </Heading>
+      <Heading className="text-sm leading-snug lg:text-[11px]">{props.children}</Heading>
+    </>
+  );
+
+  if (available && props.href) {
+    return (
+      <Link href={props.href} className={cn(surface, "bg-muted/40", props.className)}>
+        {statusSlot}
+        {body}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={cn(surface, available ? cn("bg-muted/40", props.className) : "bg-muted/15 hover:bg-muted/25")}>
+      {statusSlot}
+      {body}
     </div>
   );
 };

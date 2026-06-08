@@ -275,3 +275,27 @@
     opacity: 0.5;
     }
 }
+
+/* Game tile preview animations, the title fades in only while the art is sharp. */
+@keyframes pvCoverZoom {
+  0% { filter: blur(0.7rem); transform: scale(1.12); }
+  50%, 82% { filter: blur(0); transform: scale(1); }
+  100% { filter: blur(0.7rem); transform: scale(1.12); }
+}
+@keyframes pvChar {
+  0% { filter: blur(0.9rem); }
+  50%, 82% { filter: blur(0); }
+  100% { filter: blur(0.9rem); }
+}
+@keyframes pvLabel {
+  0%, 42% { opacity: 0; }
+  54%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.pv-cover-zoom { animation: pvCoverZoom 3.4s ease-in-out infinite; }
+.pv-char { animation: pvChar 3.4s ease-in-out infinite; }
+.pv-label { animation: pvLabel 3.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pv-cover-zoom, .pv-char { animation: none; filter: none; transform: none; }
+  .pv-label { animation: none; opacity: 1; }
+}

@@ -3,6 +3,7 @@ import { ImageIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { AnimeHit } from "@/app/actions/anime";
+import { scoreColor } from "@/lib/score";
 import { cn } from "@/lib/utils";
 
 export type AnimeGridProps = {
@@ -24,17 +25,6 @@ const highlight = (title: string, query: string): ReactNode => {
       {title.slice(idx + q.length)}
     </>
   );
-};
-
-// Color band reads the score as a temperature, emerald for excellent, amber
-// for solid, orange for okay, rose for weak, so nothing falls to a flat gray
-// and the eye can scan quality at a glance.
-const scoreBand = (n: number | undefined) => {
-  if (typeof n !== "number") return "text-foreground";
-  if (n >= 85) return "text-emerald-400";
-  if (n >= 75) return "text-amber-400";
-  if (n >= 65) return "text-orange-400";
-  return "text-rose-400";
 };
 
 // Three-stop shadow stack, a tight crisp halo plus a softer body so text reads
@@ -77,7 +67,7 @@ const Tile = (props: { anime: AnimeHit; query: string; priority?: boolean }) => 
         {highlight(a.title, props.query)}
       </span>
       <div className="absolute right-2 bottom-2 flex flex-col items-end gap-0.5 tabular-nums">
-        {s ? <span className={cn("font-bold text-xl leading-none", COVER_TEXT, scoreBand(a.score))}>{s}</span> : null}
+        {s ? <span className={cn("font-bold text-xl leading-none", COVER_TEXT)} style={{ color: scoreColor(a.score ?? 0) }}>{s}</span> : null}
         {a.year ? <span className={cn("text-white text-xs", COVER_TEXT)}>{a.year}</span> : null}
       </div>
     </Link>
