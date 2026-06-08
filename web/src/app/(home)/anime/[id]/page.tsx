@@ -156,7 +156,7 @@ const RelationCard = (props: { relation: AnimeRelation }) => {
     <Link
       href={`/anime/${r.animeId}`}
       prefetch={false}
-      className="-m-2 block rounded-lg p-2 outline-none transition-colors hover:bg-accent/40 focus-visible:bg-accent/50"
+      className="group block overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
     >
       <div className="relative aspect-2/3 overflow-hidden bg-muted/40">
         {r.coverSourceUrl ? (
@@ -164,6 +164,7 @@ const RelationCard = (props: { relation: AnimeRelation }) => {
         ) : (
           <ImageIcon aria-hidden className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2 size-6 text-foreground/15" />
         )}
+        <div className="pointer-events-none absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/35 group-focus-visible:bg-black/35" />
         <span className={cn("absolute top-2 right-2 left-2 line-clamp-2 font-semibold text-white text-xs leading-tight", COVER_OVERLAY_TEXT)}>
           {r.title ?? "External"}
         </span>
