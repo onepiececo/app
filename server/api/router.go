@@ -51,6 +51,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	mux.HandleFunc("GET /v1/days", catalogH.Days)
 
 	mux.HandleFunc("GET /v1/puzzles", puzzleH.Today)
+	mux.HandleFunc("GET /v1/puzzles/statuses", puzzleH.Statuses)
 	mux.HandleFunc("POST /v1/puzzles/{id}/guess", puzzleH.Guess)
 
 	mux.HandleFunc("GET /v1/players/me", playerH.Me)

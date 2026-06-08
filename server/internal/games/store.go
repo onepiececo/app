@@ -56,6 +56,51 @@ func (s *Store) GetByGameDate(ctx context.Context, game string, date time.Time) 
 	`, game, date))
 }
 
+// DayStatus is a player's per day standing for a game, sent to the home grid.
+type DayStatus struct {
+	Date   string `json:"date"`
+	Status string `json:"status"`
+}
+
+// PlayerStatuses reads a player's per day standing without ever creating an attempt, only days with a real guess count.
+func (s *Store) PlayerStatuses(ctx context.Context, game string, userID, anonHash *string) ([]DayStatus, error) {
+	const sel = `
+		SELECT p.puzzle_date,
+		       CASE WHEN pa.status <> 'started' THEN pa.status ELSE 'in_progress' END
+		FROM puzzle_attempt pa
+		JOIN puzzle p ON p.id = pa.puzzle_id
+		JOIN player_identity pi ON pi.id = pa.player_id`
+
+	var rows pgx.Rows
+	var err error
+	switch {
+	case userID != nil:
+		rows, err = s.pool.Query(ctx, sel+`
+		WHERE p.game_id = $1 AND pa.guesses_count > 0 AND pi.user_id = $2`, game, *userID)
+	case anonHash != nil:
+		rows, err = s.pool.Query(ctx, sel+`
+		JOIN anonymous_player ap ON ap.id = pi.anonymous_player_id
+		WHERE p.game_id = $1 AND pa.guesses_count > 0 AND ap.anonymous_key_hash = $2`, game, *anonHash)
+	default:
+		return []DayStatus{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]DayStatus, 0)
+	for rows.Next() {
+		var d time.Time
+		var st string
+		if err := rows.Scan(&d, &st); err != nil {
+			return nil, err
+		}
+		out = append(out, DayStatus{Date: d.Format("2006-01-02"), Status: st})
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) GetByID(ctx context.Context, id int64) (*Puzzle, error) {
 	return scanPuzzle(s.pool.QueryRow(ctx, `
 		SELECT id, game_id, puzzle_date, payload, answer_key

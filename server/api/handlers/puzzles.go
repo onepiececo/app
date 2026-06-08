@@ -114,6 +114,33 @@ func (h *PuzzleHandler) Today(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, view)
 }
 
+// Statuses returns the player's per day standing for a game, read only so viewing the home grid never starts a puzzle.
+func (h *PuzzleHandler) Statuses(w http.ResponseWriter, r *http.Request) {
+	game := r.URL.Query().Get("game")
+	if game == "" {
+		game = games.ClueGame
+	}
+	var userID *string
+	if bearer := r.Header.Get("Authorization"); bearer != "" {
+		if uid, err := auth.VerifyBearer(h.jwks, bearer); err == nil && uid != "" {
+			userID = &uid
+		}
+	}
+	var anonHash *string
+	if userID == nil {
+		if key := r.Header.Get("X-Anonymous-Key"); key != "" {
+			hash := player.HashAnonymousKey(key)
+			anonHash = &hash
+		}
+	}
+	statuses, err := h.store.PlayerStatuses(r.Context(), game, userID, anonHash)
+	if err != nil {
+		httpx.WriteError(w, httpx.APIError{Status: http.StatusInternalServerError, Code: "statuses_failed", Message: err.Error()})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, statuses)
+}
+
 // Guess scores a title guess against the puzzle's answer.
 func (h *PuzzleHandler) Guess(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePuzzleID(w, r)
